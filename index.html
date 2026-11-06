@@ -22,6 +22,7 @@
           <p class="qtext">好きなのはどれ?<small>(いくつでも・なしでも)</small></p>
         </div>
         <div class="steps" id="steps" aria-hidden="true"></div>
+        <p class="note" id="quizNote" hidden></p>
         <div class="options" id="options"></div>
         <div class="qfoot">
           <button type="button" class="btn btn-main" id="nextBtn">次へ</button>
@@ -52,6 +53,16 @@
           <p class="picks" id="picks"></p>
         </div>
       </section>
+
+      <details class="seen" id="seen">
+        <summary>見た作品 <span class="count" id="seenCount"></span></summary>
+        <div class="seen-body">
+          <p class="note">☆で評価した作品は、次の診断の設問とおすすめに出なくなります。評価はこのブラウザにだけ保存されます。</p>
+          <p class="note" id="seenWarn" hidden></p>
+          <p class="note" id="seenEmpty">まだありません。設問やおすすめの☆で評価すると、ここに並びます。</p>
+          <ul class="seen-list" id="seenList"></ul>
+        </div>
+      </details>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

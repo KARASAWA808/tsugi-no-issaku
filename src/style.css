@@ -12,6 +12,7 @@
   --marker-ink: #FFFFFF;
   --accent: #17657F;
   --accent-ink: #FFFFFF;
+  --star: #A8650A;
   --font-pop: "Yusei Magic", "Hiragino Maru Gothic ProN", "Yu Gothic", sans-serif;
   --font-body: "Zen Kaku Gothic New", "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif;
 }
@@ -19,7 +20,7 @@
   :root {
     --bg: #12161D; --surface: #1C222C; --ink: #E8ECEF; --muted: #9AA6B4; --line: #323B48;
     --pop: #F2C92E; --pop-ink: #1E1A0A; --pop-soft: #5E4F0C; --marker: #C2331F; --marker-ink: #FFFFFF;
-    --accent: #5DB6D1; --accent-ink: #0C1A20; color-scheme: dark;
+    --accent: #5DB6D1; --accent-ink: #0C1A20; --star: #F2C92E; color-scheme: dark;
   }
 }
 * { box-sizing: border-box; }
@@ -56,8 +57,9 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .steps i.done { background: var(--ink); }
 .steps i.now { background: var(--accent); }
 .options { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 12px; }
+.opt-wrap { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .opt {
-  position: relative; text-align: left; background: var(--surface); color: var(--ink); border: 2px solid var(--line); border-radius: 6px;
+  flex: 1; position: relative; text-align: left; background: var(--surface); color: var(--ink); border: 2px solid var(--line); border-radius: 6px;
   padding: 16px; display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 148px;
   transition: border-color .12s ease, transform .12s ease, background-color .12s ease;
 }
@@ -73,6 +75,14 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .opt .kind { align-self: flex-start; border: 1px solid var(--ink); border-radius: 999px; padding: 0 10px; font-size: .78rem; font-weight: 700; }
 .opt .name { font-weight: 700; font-size: 1.1rem; line-height: 1.45; overflow-wrap: anywhere; }
 .opt .sub { color: var(--muted); font-size: .88rem; line-height: 1.6; }
+/* 設問カードの下の「見たなら☆」 */
+.rate { display: flex; align-items: center; gap: 4px 8px; flex-wrap: wrap; padding-inline: 4px; color: var(--muted); font-size: .82rem; }
+.stars { display: inline-flex; }
+.star {
+  border: 0; background: transparent; color: var(--star); font-size: 1.2rem; line-height: 1;
+  min-width: 32px; min-height: 32px; padding: 0; border-radius: 4px;
+}
+.star:hover { background: color-mix(in srgb, var(--star) 14%, transparent); }
 .qfoot { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
 .hint { color: var(--muted); font-size: .85rem; flex: 1; min-width: 12em; }
 
@@ -108,6 +118,9 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .pop h3 { font-size: 1.05rem; font-weight: 700; line-height: 1.5; overflow-wrap: anywhere; }
 .creator { font-size: .82rem; color: var(--pop-soft); font-weight: 500; }
 .reason { font-size: .92rem; line-height: 1.7; }
+.pop-rate { display: flex; align-items: center; flex-wrap: wrap; gap: 0 8px; font-size: .82rem; font-weight: 700; }
+.pop-rate .star { color: var(--pop-ink); }
+.pop-rate .star:hover { background: color-mix(in srgb, var(--pop-ink) 12%, transparent); }
 .pop-foot { margin-top: auto; padding-top: 10px; border-top: 2px dashed var(--pop-soft); display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; font-size: .82rem; }
 .pop-foot span { overflow-wrap: anywhere; min-width: 0; }
 .pop-foot a { color: var(--pop-ink); font-weight: 700; }
@@ -118,4 +131,15 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .toggle { border: 1px solid var(--line); background: transparent; color: var(--ink); border-radius: 999px; padding: 4px 14px; font-size: .9rem; }
 .toggle[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--bg); font-weight: 700; }
 .note { color: var(--muted); font-size: .85rem; }
+.btn-small { padding: 4px 12px; font-size: .85rem; }
+
+/* 見た作品の一覧。設問と結果のどちらの画面でも下に出す */
+.seen { border-top: 1px solid var(--line); padding-top: 16px; }
+.seen summary { cursor: pointer; font-weight: 700; }
+.seen .count { color: var(--muted); font-weight: 500; font-size: .9rem; margin-left: .3em; }
+.seen-body { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.seen-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.seen-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.seen-name { flex: 1; min-width: 12em; display: flex; align-items: center; gap: 8px; font-weight: 500; overflow-wrap: anywhere; }
+.seen-name .kind { border: 1px solid var(--ink); border-radius: 999px; padding: 0 10px; font-size: .75rem; font-weight: 700; flex: none; }
 [hidden] { display: none !important; }
