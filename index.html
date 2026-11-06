@@ -55,6 +55,12 @@
         </div>
         <p class="status" id="status" role="status" hidden></p>
         <div class="shelf" id="shelf"></div>
+        <section class="db" id="dbSection" aria-label="データベースからのおすすめ" hidden>
+          <h2 class="db-title">メディア芸術データベースからも</h2>
+          <p class="note">文化庁・国立アートリサーチセンターの<a href="https://mediaarts-db.artmuseums.go.jp/" target="_blank" rel="noopener">メディア芸術データベース</a>から取り込んだ漫画・アニメ・ゲームのうち、ジャンルからタグを付けられた作品です。ひとこと紹介はまだありません。</p>
+          <p class="note" id="dbNote" hidden></p>
+          <div class="shelf" id="dbShelf"></div>
+        </section>
         <p class="note" id="rateNote" role="status"></p>
         <div class="after">
           <div class="row">
@@ -86,6 +92,10 @@
           <ul class="seen-list" id="interestList"></ul>
         </div>
       </details>
+
+      <footer class="credit">
+        <p class="note">作品データの一部は、<a href="https://mediaarts-db.artmuseums.go.jp/" target="_blank" rel="noopener">メディア芸術データベース</a>(文化庁・独立行政法人国立美術館 国立アートリサーチセンター)の<a href="https://github.com/mediaarts-db/dataset" target="_blank" rel="noopener">データセット</a>をもとにしています。このデータセットは自由な二次利用が可能です。このサイトでは、作品の抜き出し・題名の整理・ジャンルからの好みタグ付けなどの編集・加工をしており、その結果は元データの提供元によるものではありません。ジャンルの補いには <a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a>(CC0)も使っています。</p>
+      </footer>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

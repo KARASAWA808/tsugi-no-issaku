@@ -1,36 +1,36 @@
-import type { Work } from "./catalog";
+import { keyOf, type Work } from "./catalog";
 import { WORKS_PER_QUIZ, shuffle } from "./quiz";
 
 export const RATINGS = [1, 2, 3, 4, 5] as const;
 export type Rating = (typeof RATINGS)[number];
 
-/** 見た作品と自分の評価。キーは作品名(カタログ内で重複しない) */
+/** 見た作品と自分の評価。キーは keyOf(作品名か、取り込んだ作品の ID) */
 export type Seen = Map<string, Rating>;
 
 const VERSION = 1;
 
 const isRating = (n: unknown): n is Rating => RATINGS.includes(n as Rating);
 
-/** 見た作品として評価を付ける。付け直しは上書き */
-export function rate(seen: Seen, title: string, rating: Rating): void {
+/** 見た作品として評価を付ける。付け直しは上書き。key は keyOf(work) */
+export function rate(seen: Seen, key: string, rating: Rating): void {
   if (!isRating(rating)) throw new Error("評価は1〜5です");
-  seen.set(title, rating);
+  seen.set(key, rating);
 }
 
 /** 見た作品の記録を取り消す */
-export function unrate(seen: Seen, title: string): void {
-  seen.delete(title);
+export function unrate(seen: Seen, key: string): void {
+  seen.delete(key);
 }
 
-export const ratingOf = (seen: Seen, work: Work): Rating | undefined => seen.get(work.title);
+export const ratingOf = (seen: Seen, work: Work): Rating | undefined => seen.get(keyOf(work));
 
-export const unseenOf = (catalog: Work[], seen: Seen): Work[] => catalog.filter((w) => !seen.has(w.title));
+export const unseenOf = (catalog: Work[], seen: Seen): Work[] => catalog.filter((w) => !seen.has(keyOf(w)));
 
 /** 見た作品を評価の高い順に。同じ評価ならカタログ順。カタログにない作品名は出さない */
 export function seenList(catalog: Work[], seen: Seen): { work: Work; rating: Rating }[] {
   return catalog
     .flatMap((work) => {
-      const rating = seen.get(work.title);
+      const rating = seen.get(keyOf(work));
       return rating ? [{ work, rating }] : [];
     })
     .sort((a, b) => b.rating - a.rating);
@@ -51,7 +51,7 @@ export function quizCatalog(catalog: Work[], seen: Seen, random: () => number = 
   const unseen = unseenOf(catalog, seen);
   const lack = Math.min(WORKS_PER_QUIZ, catalog.length) - unseen.length;
   if (lack <= 0) return { works: unseen, filled: 0 };
-  const fill = shuffle(catalog.filter((w) => seen.has(w.title)), random).slice(0, lack);
+  const fill = shuffle(catalog.filter((w) => seen.has(keyOf(w))), random).slice(0, lack);
   return { works: unseen.concat(fill), filled: fill.length };
 }
 
@@ -71,8 +71,8 @@ export function parse(text: string | null | undefined): Seen {
   }
   const ratings = (data as { ratings?: unknown } | null)?.ratings;
   if (!ratings || typeof ratings !== "object" || Array.isArray(ratings)) return seen;
-  for (const [title, rating] of Object.entries(ratings)) {
-    if (title && isRating(rating)) seen.set(title, rating);
+  for (const [key, rating] of Object.entries(ratings)) {
+    if (key && isRating(rating)) seen.set(key, rating);
   }
   return seen;
 }

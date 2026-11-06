@@ -1,45 +1,45 @@
-import type { Work } from "./catalog";
+import { keyOf, type Work } from "./catalog";
 import { rate, type Rating, type Seen } from "./seen";
 
-/** 「気になる」を付けた作品。まだ見ていないが興味がある作品の名前の集まり */
+/** 「気になる」を付けた作品。まだ見ていないが興味がある作品のキー(keyOf)の集まり */
 export type Interest = Set<string>;
 
 const VERSION = 1;
 
-/** 気になるを付ける。すでに付いていれば何もしない */
-export function mark(interest: Interest, title: string): void {
-  if (title) interest.add(title);
+/** 気になるを付ける。すでに付いていれば何もしない。key は keyOf(work) */
+export function mark(interest: Interest, key: string): void {
+  if (key) interest.add(key);
 }
 
 /** 気になるを外す */
-export function unmark(interest: Interest, title: string): void {
-  interest.delete(title);
+export function unmark(interest: Interest, key: string): void {
+  interest.delete(key);
 }
 
 /** 付いていれば外し、付いていなければ付ける。付けたら true */
-export function toggle(interest: Interest, title: string): boolean {
-  if (interest.has(title)) {
-    unmark(interest, title);
+export function toggle(interest: Interest, key: string): boolean {
+  if (interest.has(key)) {
+    unmark(interest, key);
     return false;
   }
-  mark(interest, title);
+  mark(interest, key);
   return true;
 }
 
-export const isInterested = (interest: Interest, work: Work): boolean => interest.has(work.title);
+export const isInterested = (interest: Interest, work: Work): boolean => interest.has(keyOf(work));
 
 /**
  * ☆を付けると見た作品になるので、「気になる」は自動で外す。
  * 逆に「気になる」を付けても☆は変えない(toggle は seen に触れない)。
  */
-export function rateAndClear(seen: Seen, interest: Interest, title: string, rating: Rating): void {
-  rate(seen, title, rating);
-  unmark(interest, title);
+export function rateAndClear(seen: Seen, interest: Interest, key: string, rating: Rating): void {
+  rate(seen, key, rating);
+  unmark(interest, key);
 }
 
-/** 気になる作品をカタログ順に。カタログにない作品名は出さない */
+/** 気になる作品をカタログ順に。カタログにないキーは出さない */
 export function interestList(catalog: Work[], interest: Interest): Work[] {
-  return catalog.filter((w) => interest.has(w.title));
+  return catalog.filter((w) => interest.has(keyOf(w)));
 }
 
 export function serializeInterest(interest: Interest): string {

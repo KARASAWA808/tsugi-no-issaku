@@ -1,0 +1,38 @@
+{
+  "source": "mediaarts-db/dataset main (ver1.1, 2022-02)",
+  "wikidata": "Wikidata (2026-11-06 取得)",
+  "generatedAt": "2026-11-06",
+  "excludedAdult": 5783,
+  "wikidataMatched": {
+    "byId": 5810,
+    "byTitle": 8385
+  },
+  "byKind": {
+    "マンガ単行本シリーズ": 133039,
+    "アニメテレビレギュラーシリーズ": 5630,
+    "アニメテレビ単発アニメシリーズ": 45,
+    "アニメ映画シリーズ": 2573,
+    "ゲーム作品": 5082
+  },
+  "byMedia": {
+    "漫画": {
+      "total": 108946,
+      "tagged": 3196,
+      "untagged": 105750,
+      "withGenres": 3531
+    },
+    "アニメ": {
+      "total": 7853,
+      "tagged": 1588,
+      "untagged": 6265,
+      "withGenres": 1744
+    },
+    "ゲーム": {
+      "total": 4917,
+      "tagged": 2969,
+      "untagged": 1948,
+      "withGenres": 4096
+    }
+  },
+  "tagged": 7753
+}
