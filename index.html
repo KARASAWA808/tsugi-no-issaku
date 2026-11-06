@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="3択から一番好きな作品を選ぶ設問に10回答えると、次にハマりそうな作品を診断します。" />
+    <title>つぎの一作</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Yusei+Magic&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" />
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1><span>つぎの一作</span></h1>
+        <p class="lead">3つのうち、いちばん好きな作品を選んでください。10問答えると、次にハマりそうな作品を6つ選びます。</p>
+      </header>
+
+      <section class="quiz" id="quiz" aria-label="設問">
+        <div class="qhead">
+          <p class="qnum" id="qnum" aria-live="polite"></p>
+          <p class="qtext">いちばん好きなのは?</p>
+        </div>
+        <div class="steps" id="steps" aria-hidden="true"></div>
+        <div class="options" id="options"></div>
+        <div class="qfoot">
+          <button type="button" class="btn btn-quiet" id="backBtn">ひとつ戻る</button>
+          <button type="button" class="btn btn-quiet" id="swapBtn">3つとも知らない</button>
+          <p class="hint" id="swapHint"></p>
+        </div>
+      </section>
+
+      <section class="result" id="result" aria-label="診断結果" hidden>
+        <div class="type">
+          <span class="eyebrow">あなたの好みタイプ</span>
+          <h2 id="typeName"></h2>
+          <p id="typeSummary"></p>
+          <div class="chips" id="typeTags"></div>
+        </div>
+        <p class="status" id="status" role="status" hidden></p>
+        <div class="shelf" id="shelf"></div>
+        <div class="after">
+          <div class="row" role="group" aria-labelledby="mediaLabel">
+            <span class="rowlabel" id="mediaLabel">種類をしぼる</span>
+            <span class="row" id="mediaList"></span>
+          </div>
+          <div class="row">
+            <button type="button" class="btn btn-main" id="retryBtn">最初からやり直す</button>
+          </div>
+          <p class="picks" id="picks"></p>
+        </div>
+      </section>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
