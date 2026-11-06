@@ -1,0 +1,28 @@
+{
+  "source": "TMDB (https://www.themoviedb.org/) API v3",
+  "fetchedAt": "2026-11-06",
+  "refetchBy": "2027-05-07",
+  "conditions": {
+    "movie": "discover/movie: region=JP かつ 日本での公開種別が 2〜6(劇場・配信・パッケージ・TV)のいずれか(release_dates の JP)。vote_count >= 10",
+    "tv": "discover/tv: (a) watch_region=JP で配信情報(JustWatch 提供)がある(定額・無料・広告・レンタル・購入のいずれか)、vote_count >= 10。(b) 制作国が日本、vote_count >= 3。(a)と(b)の和集合"
+  },
+  "maxPages": 250,
+  "excluded": {
+    "ドキュメンタリー・ニュース・リアリティ・トーク": 260,
+    "アニメのテレビシリーズ": 6044,
+    "日本語の題名なし": 943
+  },
+  "byMedia": {
+    "映画": {
+      "total": 4317,
+      "tagged": 4188,
+      "untagged": 129
+    },
+    "ドラマ": {
+      "total": 3140,
+      "tagged": 2760,
+      "untagged": 380
+    }
+  },
+  "tagged": 6948
+}

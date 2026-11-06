@@ -72,7 +72,7 @@ let ratedAtStart = new Set<string>();
 /** おすすめのカードで評価したときの一言。カードはすぐ消えるので、ここで保存を知らせる */
 let rateMessage = "";
 /**
- * メディア芸術データベースから取り込んだ作品。読み終わるまでは空。
+ * メディア芸術データベースと TMDB から取り込んだ作品。読み終わるまでは空。
  * 設問には使わず(ひとことがなく、知っているか判断しにくい)、おすすめの第2段と見た作品の一覧に使う
  */
 let imported: Work[] = [];
@@ -361,7 +361,7 @@ function renderResult() {
 }
 
 /**
- * メディア芸術データベースから取り込んだ作品のおすすめ(第2段)。
+ * メディア芸術データベースと TMDB から取り込んだ作品のおすすめ(第2段)。1つの段にまとめ、出典はカードごとのリンクで示す。
  * 手書きの作品とは分けて出す。ひとことがなく、隠れた名作の印もないので、「隠れた名作だけ」のときは出さない
  */
 function renderImportedShelf(ratings: ReturnType<typeof seenList>, wanted: Work[], hasLiked: boolean) {
@@ -378,8 +378,8 @@ function renderImportedShelf(ratings: ReturnType<typeof seenList>, wanted: Work[
     ? "データベースの作品を読み込めませんでした。"
     : !imported.length
       ? "データベースの作品を読み込んでいます…"
-      : !["漫画", "アニメ", "ゲーム"].some((m) => media.has(m as Media))
-        ? "取り込んだ作品は漫画・アニメ・ゲームだけです。診断する種類にどれかを入れると、ここにも出ます。"
+      : !["漫画", "アニメ", "ゲーム", "映画", "ドラマ"].some((m) => media.has(m as Media))
+        ? "取り込んだ作品は漫画・アニメ・ゲーム・映画・ドラマだけです。診断する種類にどれかを入れると、ここにも出ます。"
         : "選んだ種類やジャンルで、好みに合う作品が見つかりませんでした。";
 }
 

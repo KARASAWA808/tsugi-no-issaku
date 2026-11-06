@@ -1,25 +1,41 @@
 // 拡張子付きなのは、取り込みスクリプトが Node から直接読むため
 import { MEDIA, type Media, type Work } from "./catalog.ts";
 
+/** 取り込み元。madb = メディア芸術データベース(漫画・アニメ・ゲーム)、tmdb = TMDB(映画・ドラマ) */
+export type ImportSource = "madb" | "tmdb";
+
 /**
- * 外部データベース(いまはメディア芸術データベース)から取り込んだ作品。
- * data/madb/tagged.json の1件。scripts/import-madb.mjs が書き出す。
+ * 外部データベースから取り込んだ作品。data/madb/tagged.json と data/tmdb/tagged.json の1件。
+ * scripts/import-madb.mjs と scripts/import-tmdb.mjs が書き出す。
  */
 export interface ImportedEntry {
-  /** 元データの ID(例: C12345) */
+  /** 元データの ID。MADB は C12345、TMDB は movie:155 / tv:5920 のように種類を含む */
   id: string;
   title: string;
   media: Media;
   year: number | null;
   tags: string[];
-  /** Wikipedia の言語版の数。知名度の目安 */
-  sitelinks: number;
+  /** 取り込み元。古い MADB の生成物には入っていないので、なければ madb */
+  source?: ImportSource;
+  /** Wikipedia の言語版の数。知名度の目安(MADB だけ) */
+  sitelinks?: number;
 }
 
 export const MADB_NAME = "メディア芸術データベース";
 export const MADB_ID_URL = "https://mediaarts-db.artmuseums.go.jp/id/";
-/** 評価の保存キーに付ける接頭辞 */
+export const TMDB_NAME = "TMDB";
+export const TMDB_URL = "https://www.themoviedb.org/";
+/** 評価の保存キーに付ける接頭辞。出典ごとに分け、同じ作品でも出典が違えば別のキーになる */
 export const MADB_KEY_PREFIX = "madb:";
+export const TMDB_KEY_PREFIX = "tmdb:";
+
+export const sourceOf = (e: ImportedEntry): ImportSource => e.source ?? "madb";
+
+/** 出典の作品ページ。TMDB は movie:155 → /movie/155 */
+export function sourceLink(e: ImportedEntry): { name: string; url: string } {
+  if (sourceOf(e) === "tmdb") return { name: TMDB_NAME, url: TMDB_URL + e.id.replace(":", "/") };
+  return { name: MADB_NAME, url: MADB_ID_URL + e.id };
+}
 
 /**
  * 版の違い(新装版、完全版、文庫版など)と表記ゆれをそろえて、同じ作品をまとめるためのキー。
@@ -44,18 +60,19 @@ export function isImportedEntry(x: unknown): x is ImportedEntry {
     && typeof e.id === "string" && e.id !== ""
     && typeof e.title === "string" && e.title !== ""
     && isMedia(e.media)
+    && (e.source === undefined || e.source === "madb" || e.source === "tmdb")
     && Array.isArray(e.tags) && e.tags.length > 0 && e.tags.every((t) => typeof t === "string");
 }
 
 /** 取り込んだ1件を、設問とおすすめに使える Work にする。ひとことは独自に書くまで空 */
 export function toWork(e: ImportedEntry): Work {
   const work: Work = {
-    id: MADB_KEY_PREFIX + e.id,
+    id: (sourceOf(e) === "tmdb" ? TMDB_KEY_PREFIX : MADB_KEY_PREFIX) + e.id,
     title: e.title,
     media: e.media,
     tags: e.tags,
     pitch: "",
-    source: { name: MADB_NAME, url: MADB_ID_URL + e.id },
+    source: sourceLink(e),
   };
   if (e.year != null) work.year = e.year;
   return work;
@@ -72,16 +89,19 @@ export function mergeImported(handwritten: readonly Work[], entries: readonly un
   for (const e of entries) {
     if (!isImportedEntry(e)) continue;
     const key = `${e.media}:${titleKey(e.title)}`;
-    if (taken.has(key) || ids.has(e.id)) continue;
+    const work = toWork(e);
+    if (taken.has(key) || ids.has(work.id!)) continue;
     taken.add(key);
-    ids.add(e.id);
-    out.push(toWork(e));
+    ids.add(work.id!);
+    out.push(work);
   }
   return out;
 }
 
-/** 取り込んだ作品を読む。別ファイルにしてあるので、結果画面を出すまで読まずに済む */
+/** 取り込んだ作品を読む。別ファイルにしてあるので、結果画面を出すまで読まずに済む。片方が読めなくても、読めた方は使う */
 export async function loadImported(handwritten: readonly Work[]): Promise<Work[]> {
-  const mod = await import("../data/madb/tagged.json");
-  return mergeImported(handwritten, mod.default as unknown[]);
+  const files = await Promise.allSettled([import("../data/madb/tagged.json"), import("../data/tmdb/tagged.json")]);
+  const entries = files.flatMap((f) => (f.status === "fulfilled" ? (f.value.default as unknown[]) : []));
+  if (files.every((f) => f.status === "rejected")) throw new Error("取り込んだ作品を読めませんでした");
+  return mergeImported(handwritten, entries);
 }

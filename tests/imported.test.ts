@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import summary from "../data/madb/summary.json";
 import tagged from "../data/madb/tagged.json";
+import tmdbSummary from "../data/tmdb/summary.json";
+import tmdbTagged from "../data/tmdb/tagged.json";
 import { CATALOG, MEDIA, keyOf, type Work } from "../src/catalog";
 import { diagnose } from "../src/diagnose";
-import { MADB_ID_URL, MADB_KEY_PREFIX, isImportedEntry, mergeImported, titleKey, toWork } from "../src/imported";
+import {
+  MADB_ID_URL, MADB_KEY_PREFIX, TMDB_KEY_PREFIX, isImportedEntry, mergeImported, titleKey, toWork,
+} from "../src/imported";
 import { interestList, isInterested, rateAndClear, toggle, type Interest } from "../src/interest";
 import { rate, ratingOf, seenList, unseenOf, type Seen } from "../src/seen";
 import { TAGS } from "../src/tagmap";
@@ -34,8 +38,19 @@ describe("取り込んだ作品を Work にする", () => {
     expect(toWork({ ...entry, year: null }).year).toBeUndefined();
   });
 
+  it("TMDB の作品は tmdb: をキーにし、TMDB の作品ページを付ける", () => {
+    const w = toWork({ id: "movie:155", title: "ダークナイト", media: "映画", year: 2008, tags: ["ダーク", "サスペンス"], source: "tmdb" });
+    expect(keyOf(w)).toBe(`${TMDB_KEY_PREFIX}movie:155`);
+    expect(w.source).toEqual({ name: "TMDB", url: "https://www.themoviedb.org/movie/155" });
+    const tv = toWork({ id: "tv:5920", title: "メンタリスト", media: "ドラマ", year: 2008, tags: ["ミステリー"], source: "tmdb" });
+    expect(tv.source?.url).toBe("https://www.themoviedb.org/tv/5920");
+    expect(keyOf(tv)).toBe(`${TMDB_KEY_PREFIX}tv:5920`);
+  });
+
   it("壊れた件は使わない", () => {
     expect(isImportedEntry(entry)).toBe(true);
+    expect(isImportedEntry({ ...entry, source: "tmdb" })).toBe(true);
+    expect(isImportedEntry({ ...entry, source: "imdb" })).toBe(false);
     expect(isImportedEntry({ ...entry, tags: [] })).toBe(false);
     expect(isImportedEntry({ ...entry, media: "映画館" })).toBe(false);
     expect(isImportedEntry({ ...entry, title: "" })).toBe(false);
@@ -80,6 +95,39 @@ describe("取り込んだ作品を Work にする", () => {
     rateAndClear(seen, interest, keyOf(imported), 4);
     expect(interest.size).toBe(0);
     expect(ratingOf(seen, imported)).toBe(4);
+  });
+});
+
+describe("生成した data/tmdb/tagged.json", () => {
+  const entries = tmdbTagged as unknown[];
+
+  it("全件が TMDB の映画かドラマで、タグは18タグだけ、ID は重複しない", () => {
+    expect(entries.length).toBeGreaterThan(1000);
+    const ids = new Set<string>();
+    for (const e of entries) {
+      expect(isImportedEntry(e)).toBe(true);
+      if (!isImportedEntry(e)) continue;
+      expect(e.source).toBe("tmdb");
+      expect(["映画", "ドラマ"]).toContain(e.media);
+      expect(e.id).toMatch(/^(movie|tv):\d+$/);
+      for (const t of e.tags) expect((TAGS as readonly string[]).includes(t), `${e.id}: ${t}`).toBe(true);
+      expect(e.tags.length).toBeLessThanOrEqual(4);
+      expect(ids.has(e.id), e.id).toBe(false);
+      ids.add(e.id);
+    }
+    expect(entries.length).toBe(tmdbSummary.tagged);
+    expect(tmdbSummary.fetchedAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it("MADB の作品と合わせても、手書きの作品や互いのキーとぶつからない", () => {
+    const works = mergeImported(CATALOG, [...(tagged as unknown[]), ...entries]);
+    const keys = new Set(CATALOG.map(keyOf));
+    for (const w of works) {
+      expect(keys.has(keyOf(w)), w.title).toBe(false);
+      keys.add(keyOf(w));
+    }
+    expect(works.filter((w) => w.source?.name === "TMDB").length).toBeGreaterThan(1000);
+    expect(works.filter((w) => w.source?.name === "メディア芸術データベース").length).toBeGreaterThan(1000);
   });
 });
 
