@@ -1,4 +1,4 @@
-/* Layout: one quiet column (3 works a question, pick any number, ten times), ending in a shelf of tilted bookstore POP cards, the only loud element. */
+/* Layout: one quiet column (pick the kinds, then rate the ones you have seen, 6 works a question, up to five times), ending in a shelf of tilted bookstore POP cards, the only loud element. */
 :root {
   --bg: #EEF1EE;
   --surface: #FFFFFF;
@@ -52,31 +52,23 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .qnum small { font-size: 1rem; color: var(--muted); }
 .qtext { font-weight: 700; }
 .qtext small { font-weight: 500; color: var(--muted); font-size: .85rem; margin-left: .3em; }
-.steps { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; }
+.steps { display: grid; grid-template-columns: repeat(var(--n, 5), 1fr); gap: 4px; }
 .steps i { height: 6px; border-radius: 3px; background: var(--line); }
 .steps i.done { background: var(--ink); }
 .steps i.now { background: var(--accent); }
 .options { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 12px; }
-.opt-wrap { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .opt {
-  flex: 1; position: relative; text-align: left; background: var(--surface); color: var(--ink); border: 2px solid var(--line); border-radius: 6px;
-  padding: 16px; display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 148px;
-  transition: border-color .12s ease, transform .12s ease, background-color .12s ease;
+  background: var(--surface); color: var(--ink); border: 2px solid var(--line); border-radius: 6px;
+  padding: 14px 14px 8px; display: flex; flex-direction: column; gap: 6px; min-width: 0;
+  transition: border-color .12s ease, background-color .12s ease;
 }
-.opt:hover { border-color: var(--ink); transform: translateY(-2px); }
-/* 「好き」の印。押されている間だけ右上に出す */
-.opt::after {
-  content: "好き"; position: absolute; top: 12px; right: 12px;
-  background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 0 10px;
-  font-size: .78rem; font-weight: 700; line-height: 1.6; opacity: 0; transform: scale(.8); transition: opacity .12s ease, transform .12s ease;
-}
-.opt[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
-.opt[aria-pressed="true"]::after { opacity: 1; transform: scale(1); }
+/* ☆を付けた作品は枠の色で分かるようにする */
+.opt.rated { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
 .opt .kind { align-self: flex-start; border: 1px solid var(--ink); border-radius: 999px; padding: 0 10px; font-size: .78rem; font-weight: 700; }
-.opt .name { font-weight: 700; font-size: 1.1rem; line-height: 1.45; overflow-wrap: anywhere; }
-.opt .sub { color: var(--muted); font-size: .88rem; line-height: 1.6; }
-/* 設問カードの下の「見たなら☆」 */
-.rate { display: flex; align-items: center; gap: 4px 8px; flex-wrap: wrap; padding-inline: 4px; color: var(--muted); font-size: .82rem; }
+.opt .name { font-weight: 700; font-size: 1.05rem; line-height: 1.45; overflow-wrap: anywhere; }
+.opt .sub { color: var(--muted); font-size: .85rem; line-height: 1.6; flex: 1; }
+/* 設問カードの中の「見たなら☆」 */
+.rate { display: flex; align-items: center; gap: 0 6px; flex-wrap: wrap; color: var(--muted); font-size: .8rem; border-top: 1px dashed var(--line); padding-top: 4px; }
 .stars { display: inline-flex; }
 .star {
   border: 0; background: transparent; color: var(--star); font-size: 1.2rem; line-height: 1;
@@ -113,7 +105,8 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .pop:hover { transform: rotate(0); }
 .pop-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .media { background: var(--marker); color: var(--marker-ink); font-weight: 700; font-size: .8rem; padding: 1px 10px; border-radius: 2px; }
-.surprise { font-family: var(--font-pop); font-size: .9rem; }
+/* 隠れた名作の印。POPカードの右上に手書き風で出す */
+.surprise { font-family: var(--font-pop); font-size: .9rem; border: 2px solid var(--pop-ink); border-radius: 999px; padding: 0 10px; transform: rotate(3deg); }
 .pitch { font-family: var(--font-pop); font-size: 1.45rem; line-height: 1.35; text-wrap: balance; }
 .pop h3 { font-size: 1.05rem; font-weight: 700; line-height: 1.5; overflow-wrap: anywhere; }
 .creator { font-size: .82rem; color: var(--pop-soft); font-weight: 500; }
@@ -128,9 +121,21 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .after { display: flex; flex-direction: column; gap: 14px; border-top: 1px solid var(--line); padding-top: 20px; }
 .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .rowlabel { font-weight: 700; font-size: .9rem; }
-.toggle { border: 1px solid var(--line); background: transparent; color: var(--ink); border-radius: 999px; padding: 4px 14px; font-size: .9rem; }
-.toggle[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--bg); font-weight: 700; }
 .note { color: var(--muted); font-size: .85rem; }
+.note.warn { color: var(--ink); border-left: 4px solid var(--marker); padding-left: 10px; }
+
+.filters { display: flex; flex-direction: column; gap: 16px; }
+/* 診断する種類とジャンルのチェック。本物のチェックボックスを丸いラベルで包む */
+.filter { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.filter legend { font-weight: 700; font-size: .9rem; padding: 0; margin-bottom: 8px; }
+.checks { display: flex; flex-wrap: wrap; gap: 8px; }
+.check {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 999px; padding: 4px 14px 4px 10px; font-size: .9rem; background: var(--surface);
+}
+.check input { accent-color: var(--accent); width: 18px; height: 18px; margin: 0; }
+.check:has(input:checked) { border-color: var(--accent); font-weight: 700; }
+.check:has(input:focus-visible) { outline: 3px solid var(--accent); outline-offset: 2px; }
 .btn-small { padding: 4px 12px; font-size: .85rem; }
 
 /* 見た作品の一覧。設問と結果のどちらの画面でも下に出す */

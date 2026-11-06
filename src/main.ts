@@ -1,12 +1,13 @@
 import "./style.css";
 import { CATALOG, MEDIA, type Media, type Work } from "./catalog";
-import { diagnose } from "./diagnose";
+import { LIKED_RATING, diagnose } from "./diagnose";
+import { MOODS, matches, type Filter } from "./filter";
 import {
-  TOTAL_QUESTIONS, back, canSwap, createQuiz, currentRound, isDone, isLastQuestion, isPicked,
-  next, passedWorks, pickedWorks, swap, toggle, type Quiz,
+  TOTAL_QUESTIONS, back, canSwap, createQuiz, currentRound, isDone, isLastQuestion, next, shownWorks, swap,
+  type Quiz,
 } from "./quiz";
 import {
-  RATINGS, parse, quizCatalog, rate, ratingOf, seenList, serialize, unrate, unseenOf, type Rating, type Seen,
+  RATINGS, parse, quizCatalog, rate, ratingOf, seenList, serialize, unrate, type Rating, type Seen,
 } from "./seen";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -17,33 +18,62 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: 
   return n;
 }
 
-// ---- 見た作品の保存(このブラウザの localStorage)。使えない環境ではメモリだけで動く ----
-const STORAGE_KEY = "tsugi-no-issaku:seen";
+// ---- このブラウザの localStorage への保存。使えない環境ではメモリだけで動く ----
+const SEEN_KEY = "tsugi-no-issaku:seen";
+const MEDIA_KEY = "tsugi-no-issaku:media";
+const MOODS_KEY = "tsugi-no-issaku:moods";
 let storageOk = true;
 
-function loadSeen(): Seen {
+function load(key: string): string | null {
   try {
-    return parse(localStorage.getItem(STORAGE_KEY));
+    return localStorage.getItem(key);
   } catch {
     storageOk = false;
-    return new Map();
+    return null;
   }
 }
 
-function saveSeen() {
+function store(key: string, value: string) {
   try {
-    localStorage.setItem(STORAGE_KEY, serialize(seen));
+    localStorage.setItem(key, value);
     storageOk = true;
   } catch {
     storageOk = false;
   }
 }
 
-const seen = loadSeen();
-let quiz: Quiz;
+/** 保存していた「診断する種類」。読めないか空なら全種類 */
+function loadMedia(): Set<Media> {
+  try {
+    const list = JSON.parse(load(MEDIA_KEY) ?? "[]");
+    const valid = Array.isArray(list) ? list.filter((m): m is Media => MEDIA.includes(m)) : [];
+    return new Set(valid.length ? valid : MEDIA);
+  } catch {
+    return new Set(MEDIA);
+  }
+}
+
+/** 保存していたジャンル。読めなければ指定なし(すべて) */
+function loadMoods(): Set<string> {
+  try {
+    const list = JSON.parse(load(MOODS_KEY) ?? "[]");
+    return new Set(Array.isArray(list) ? list.filter((m) => MOODS.some((x) => x.name === m)) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+const seen: Seen = parse(load(SEEN_KEY));
+const media = loadMedia();
+const moods = loadMoods();
+/** 結果画面で種類やジャンルを変えたら、設問に戻るときに出し直す */
+let quizStale = false;
+/** 条件に合う作品がないときは null。そのあいだ設問のボタンは押せない */
+let quiz: Quiz | null = null;
 /** おすすめのカードで評価したときの一言。カードはすぐ消えるので、ここで保存を知らせる */
 let rateMessage = "";
-const mediaFilter = new Set<Media>();
+
+const filterOf = (gemsOnly = false): Filter => ({ media, moods, gemsOnly });
 
 /** 描き直しても、押していたボタンにフォーカスを戻す */
 function keepFocus(render: () => void) {
@@ -54,7 +84,7 @@ function keepFocus(render: () => void) {
 
 /** 評価が変わったら、今の画面と見た作品の一覧を描き直す */
 function onSeenChange() {
-  saveSeen();
+  store(SEEN_KEY, serialize(seen));
   keepFocus(() => {
     if (!$("quiz").hidden) renderQuestion();
     if (!$("result").hidden) renderResult();
@@ -64,7 +94,7 @@ function onSeenChange() {
 
 /**
  * ☆5つの評価ボタン。scope は同じ作品が画面の複数か所に出るときにフォーカスを区別するため。
- * 今の評価と同じ☆を押すと評価を外せる(設問と一覧で使う)。
+ * 今の評価と同じ☆を押すと評価を外せる(設問で使う)。
  */
 function stars(work: Work, scope: string, opts: { clearable: boolean }) {
   const current = ratingOf(seen, work);
@@ -72,7 +102,8 @@ function stars(work: Work, scope: string, opts: { clearable: boolean }) {
   row.setAttribute("role", "group");
   row.setAttribute("aria-label", `『${work.title}』の評価`);
   for (const n of RATINGS) {
-    const b = el("button", "star" + (current && n <= current ? " on" : ""), current && n <= current ? "★" : "☆");
+    const on = current !== undefined && n <= current;
+    const b = el("button", "star" + (on ? " on" : ""), on ? "★" : "☆");
     b.type = "button";
     b.dataset.key = `${scope}:${work.title}:${n}`;
     b.setAttribute("aria-label", `星${n}`);
@@ -80,7 +111,9 @@ function stars(work: Work, scope: string, opts: { clearable: boolean }) {
     b.onclick = () => {
       if (opts.clearable && current === n) unrate(seen, work.title);
       else rate(seen, work.title, n as Rating);
-      if (scope === "pop") rateMessage = `『${work.title}』を星${n}で見た作品に入れました。付け直しや取り消しは下の「見た作品」からできます。`;
+      if (scope === "pop") {
+        rateMessage = `『${work.title}』を星${n}で見た作品に入れました。診断にもすぐ反映しています。付け直しや取り消しは下の「見た作品」からできます。`;
+      }
       onSeenChange();
     };
     row.append(b);
@@ -88,15 +121,85 @@ function stars(work: Work, scope: string, opts: { clearable: boolean }) {
   return row;
 }
 
+// ---- 診断する種類とジャンルのチェック ----
+function checkbox(label: string, checked: boolean, onChange: (input: HTMLInputElement) => void) {
+  const wrap = el("label", "check");
+  const input = el("input");
+  input.type = "checkbox";
+  input.checked = checked;
+  input.onchange = () => onChange(input);
+  wrap.append(input, el("span", undefined, label));
+  return wrap;
+}
+
+function renderFilter() {
+  $("mediaChecks").replaceChildren(...MEDIA.map((m) => checkbox(m, media.has(m), (input) => onMediaChange(m, input))));
+  $("moodChecks").replaceChildren(...MOODS.map(({ name }) => checkbox(name, moods.has(name), (input) => {
+    if (input.checked) moods.add(name); else moods.delete(name);
+    store(MOODS_KEY, JSON.stringify([...moods]));
+    afterFilterChange();
+  })));
+}
+
+const MEDIA_NOTE = "1つ以上選んでください。複数選べます。";
+
+function onMediaChange(m: Media, input: HTMLInputElement) {
+  const note = $("mediaNote");
+  if (!input.checked && media.size === 1) {
+    input.checked = true;
+    note.textContent = "最後の1つは外せません。ほかの種類を選んでから外してください。";
+    note.classList.add("warn");
+    return;
+  }
+  note.textContent = MEDIA_NOTE;
+  note.classList.remove("warn");
+  if (input.checked) media.add(m); else media.delete(m);
+  store(MEDIA_KEY, JSON.stringify([...media]));
+  afterFilterChange();
+}
+
+/** 結果画面ではおすすめだけを選び直し、設問の途中なら出し直す */
+function afterFilterChange() {
+  if (!$("result").hidden) {
+    quizStale = true;
+    renderResult();
+  } else {
+    start();
+  }
+}
+
 // ---- 設問 ----
 function start() {
   rateMessage = "";
-  const { works, filled } = quizCatalog(CATALOG, seen);
+  quizStale = false;
+  const { works, filled } = quizCatalog(CATALOG.filter((w) => matches(w, filterOf())), seen);
+  if (works.length === 0) {
+    quiz = null;
+    showEmptyQuiz();
+    return;
+  }
   quiz = createQuiz(works);
+  const notes = [];
+  if (quiz.total < TOTAL_QUESTIONS) notes.push(`選んだ種類やジャンルの作品が少ないので、設問は${quiz.total}問です。`);
+  if (filled) notes.push(`まだ評価していない作品が少ないので、評価済みの作品も${filled}作まぜています。☆を付け直せます。`);
   const note = $("quizNote");
-  note.hidden = filled === 0;
-  note.textContent = `まだ見ていない作品が少ないので、見た作品も${filled}作まぜています。`;
+  note.hidden = notes.length === 0;
+  note.textContent = notes.join("");
   showQuiz();
+}
+
+/** 条件に合う作品がひとつもないとき。設問を出さずに理由だけ見せる */
+function showEmptyQuiz() {
+  $("result").hidden = true;
+  $("quiz").hidden = false;
+  $("qnum").textContent = "";
+  $("steps").replaceChildren();
+  $("options").replaceChildren();
+  const note = $("quizNote");
+  note.hidden = false;
+  note.textContent = "選んだ条件に合う作品がありません。診断する種類やジャンルを増やしてください。";
+  for (const id of ["nextBtn", "backBtn", "swapBtn"]) $<HTMLButtonElement>(id).disabled = true;
+  $("swapHint").textContent = "";
 }
 
 function showQuiz() {
@@ -106,54 +209,43 @@ function showQuiz() {
 }
 
 function renderQuestion() {
+  if (!quiz) return;
   const round = currentRound(quiz);
-  $("qnum").replaceChildren(`Q${quiz.index + 1}`, el("small", undefined, ` / ${TOTAL_QUESTIONS}`));
+  $("qnum").replaceChildren(`Q${quiz.index + 1}`, el("small", undefined, ` / ${quiz.total}`));
 
   const steps = $("steps");
+  steps.style.setProperty("--n", String(quiz.total));
   steps.replaceChildren();
-  for (let i = 0; i < TOTAL_QUESTIONS; i++) {
+  for (let i = 0; i < quiz.total; i++) {
     steps.append(el("i", i < quiz.index ? "done" : i === quiz.index ? "now" : ""));
   }
 
-  const options = $("options");
-  options.replaceChildren();
-  for (const work of round.options) {
-    const wrap = el("div", "opt-wrap");
-    const b = el("button", "opt");
-    b.type = "button";
-    b.dataset.key = `opt:${work.title}`;
-    b.setAttribute("aria-pressed", String(isPicked(quiz, work)));
-    b.append(el("span", "kind", work.media), el("span", "name", work.title), el("span", "sub", work.pitch));
-    b.onclick = () => {
-      toggle(quiz, work);
-      b.setAttribute("aria-pressed", String(isPicked(quiz, work)));
-      renderNext();
-    };
-    const rateRow = el("div", "rate");
-    rateRow.append(el("span", "rate-label", ratingOf(seen, work) ? "見た" : "見たなら"), stars(work, "q", { clearable: true }));
-    wrap.append(b, rateRow);
-    options.append(wrap);
-  }
+  $("options").replaceChildren(
+    ...round.options.map((work) => {
+      const rated = ratingOf(seen, work) !== undefined;
+      const card = el("div", "opt" + (rated ? " rated" : ""));
+      const rateRow = el("div", "rate");
+      rateRow.append(el("span", "rate-label", rated ? "見た" : "見たなら"), stars(work, "q", { clearable: true }));
+      card.append(el("span", "kind", work.media), el("span", "name", work.title), el("span", "sub", work.pitch), rateRow);
+      return card;
+    }),
+  );
 
-  renderNext();
+  const n = round.options.filter((w) => ratingOf(seen, w) !== undefined).length;
+  $<HTMLButtonElement>("nextBtn").disabled = false;
+  $("nextBtn").textContent = isLastQuestion(quiz)
+    ? "診断する"
+    : n === 0 ? "見た作品はない" : `${n}作を評価して次へ`;
   $<HTMLButtonElement>("backBtn").disabled = quiz.index === 0;
   const ok = canSwap(quiz);
   $<HTMLButtonElement>("swapBtn").disabled = !ok;
   $("swapHint").textContent = ok
-    ? "知らない作品ばかりなら、別の3作に入れ替えられます。"
-    : "入れ替えられる作品がもうありません。知らなければ選ばずに進んでください。";
-}
-
-/** 選んだ数に合わせて「次へ」ボタンの文言を変える */
-function renderNext() {
-  const n = currentRound(quiz).picks.length;
-  const last = isLastQuestion(quiz);
-  $("nextBtn").textContent = last
-    ? "診断する"
-    : n === 0 ? "好きなものはない" : `${n}作を選んで次へ`;
+    ? "知らない作品ばかりなら、別の6作に入れ替えられます。"
+    : "入れ替えられる作品がもうありません。見ていなければ、そのまま次へ進んでください。";
 }
 
 function onNext() {
+  if (!quiz) return;
   next(quiz);
   if (isDone(quiz)) {
     $("quiz").hidden = true;
@@ -167,8 +259,10 @@ function onNext() {
 
 // ---- 診断結果 ----
 function renderResult() {
-  const picked = pickedWorks(quiz);
-  const d = diagnose({ picked, passed: passedWorks(quiz), catalog: unseenOf(CATALOG, seen), media: mediaFilter });
+  const ratings = seenList(CATALOG, seen);
+  const likedCount = ratings.filter((r) => r.rating >= LIKED_RATING).length;
+  const gemsOnly = $<HTMLInputElement>("gemsOnly").checked;
+  const d = diagnose({ ratings, catalog: CATALOG.filter((w) => matches(w, filterOf(gemsOnly))), count: 6 });
 
   $("typeName").textContent = d.typeName;
   $("typeSummary").textContent = d.summary;
@@ -177,17 +271,20 @@ function renderResult() {
   const status = $("status");
   status.hidden = d.recommendations.length > 0;
   status.className = "status err";
-  status.textContent = picked.length === 0
-    ? "「好き」と選んだ作品がないので、おすすめを出せませんでした。「選び直す」から、気になる作品をひとつでも選んでみてください。"
-    : mediaFilter.size
-      ? "この種類で、まだ見ていない作品は見つかりませんでした。しぼりこみを外してください。"
-      : "まだ見ていない作品の中に、好みに合うものが見つかりませんでした。";
+  status.textContent = ratings.length === 0
+    ? "☆を付けた作品がないので、おすすめを出せませんでした。「設問に戻る」から、見た作品に☆を付けてください。"
+    : likedCount === 0
+      ? "☆4以上を付けた作品がないので、おすすめを出せませんでした。好きだった作品に☆4〜5を付けてみてください。"
+      : gemsOnly
+        ? "選んだ種類やジャンルの隠れた名作で、まだ評価していないものの中に好みに合う作品が見つかりませんでした。「隠れた名作だけ」を外すか、種類やジャンルを増やしてみてください。"
+        : "選んだ種類やジャンルで、まだ評価していない作品の中に好みに合うものが見つかりませんでした。種類やジャンルを増やしてみてください。";
 
   $("shelf").replaceChildren(
-    ...d.recommendations.map(({ work, from, shared }) => {
+    ...d.recommendations.map(({ work, from, fromRating, shared }) => {
       const card = el("article", "pop");
       const top = el("div", "pop-top");
       top.append(el("span", "media", work.media));
+      if (work.gem) top.append(el("span", "surprise", "隠れた名作"));
       const rateRow = el("div", "pop-rate");
       rateRow.append(el("span", undefined, "もう見た?"), stars(work, "pop", { clearable: false }));
       const foot = el("div", "pop-foot");
@@ -195,7 +292,7 @@ function renderResult() {
       link.href = "https://www.google.com/search?q=" + encodeURIComponent(`${work.title} ${work.media}`);
       link.target = "_blank";
       link.rel = "noopener";
-      foot.append(el("span", undefined, `『${from.title}』が好きなあなたへ`), link);
+      foot.append(el("span", undefined, `『${from.title}』に☆${fromRating}を付けたあなたへ`), link);
       card.append(
         top,
         el("p", "pitch", work.pitch),
@@ -209,10 +306,10 @@ function renderResult() {
   );
 
   $("rateNote").textContent = rateMessage;
-
-  $("picks").textContent = picked.length
-    ? `あなたが「好き」と選んだ${picked.length}作: ` + picked.map((w) => `『${w.title}』`).join(" ")
-    : "「好き」と選んだ作品はありませんでした。";
+  const thisTime = (quiz ? shownWorks(quiz) : []).filter((w) => ratingOf(seen, w) !== undefined).length;
+  $("picks").textContent = ratings.length
+    ? `☆を付けた${ratings.length}作から診断しました。今回の設問で評価したのは${thisTime}作です。`
+    : "☆を付けた作品はまだありません。";
 }
 
 // ---- 見た作品の一覧 ----
@@ -241,23 +338,15 @@ function renderSeen() {
 }
 
 $("nextBtn").onclick = onNext;
-$("backBtn").onclick = () => { back(quiz); renderQuestion(); };
-$("swapBtn").onclick = () => { if (swap(quiz)) renderQuestion(); };
-$("fixBtn").onclick = () => { back(quiz); showQuiz(); };
+$("backBtn").onclick = () => { if (quiz) { back(quiz); renderQuestion(); } };
+$("swapBtn").onclick = () => { if (quiz && swap(quiz)) renderQuestion(); };
+$("fixBtn").onclick = () => {
+  if (!quiz || quizStale) start();
+  else { back(quiz); showQuiz(); }
+};
+$("gemsOnly").onchange = renderResult;
 $("retryBtn").onclick = start;
 
-for (const m of MEDIA) {
-  const b = el("button", "toggle", m);
-  b.type = "button";
-  b.setAttribute("aria-pressed", "false");
-  b.onclick = () => {
-    const on = !mediaFilter.has(m);
-    if (on) mediaFilter.add(m); else mediaFilter.delete(m);
-    b.setAttribute("aria-pressed", String(on));
-    renderResult();
-  };
-  $("mediaList").append(b);
-}
-
+renderFilter();
 renderSeen();
 start();

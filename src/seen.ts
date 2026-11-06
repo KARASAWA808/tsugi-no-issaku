@@ -43,11 +43,13 @@ export interface QuizCatalog {
 }
 
 /**
- * 設問に使う作品。見た作品は除くが、1回の診断に足りないときだけ見た作品をまぜて埋める。
+ * 設問に使う作品。catalog は種類でしぼった後のもの。
+ * 見た作品は除くが、1回の診断に足りないときだけ見た作品をまぜて埋める(付け直せる)。
+ * しぼった種類の作品が30作に満たなければ、ある分だけになる。
  */
 export function quizCatalog(catalog: Work[], seen: Seen, random: () => number = Math.random): QuizCatalog {
   const unseen = unseenOf(catalog, seen);
-  const lack = WORKS_PER_QUIZ - unseen.length;
+  const lack = Math.min(WORKS_PER_QUIZ, catalog.length) - unseen.length;
   if (lack <= 0) return { works: unseen, filled: 0 };
   const fill = shuffle(catalog.filter((w) => seen.has(w.title)), random).slice(0, lack);
   return { works: unseen.concat(fill), filled: fill.length };

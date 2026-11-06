@@ -1,20 +1,21 @@
 import type { Work } from "./catalog";
 
-export const TOTAL_QUESTIONS = 10;
-export const OPTIONS_PER_QUESTION = 3;
-/** 1回の診断で出す作品数。カタログ(または見ていない作品)はこれ以上必要 */
+/** 設問の最大数。作品が少ないとこれより短くなる */
+export const TOTAL_QUESTIONS = 5;
+export const OPTIONS_PER_QUESTION = 6;
+/** 1回の診断で出す作品数の上限 */
 export const WORKS_PER_QUIZ = TOTAL_QUESTIONS * OPTIONS_PER_QUESTION;
 
 export interface Round {
   options: Work[];
-  /** この設問で「好き」と選んだ作品。0〜3作 */
-  picks: Work[];
 }
 
 export interface Quiz {
   /** これまでに出した設問。rounds[index] が今の設問 */
   rounds: Round[];
   index: number;
+  /** この診断の設問数。作品が30作に満たないときは短くなる */
+  total: number;
   /** まだ出していない作品 */
   pool: Work[];
   /** 最後の設問で「診断する」を押したか */
@@ -35,33 +36,21 @@ function draw(quiz: Quiz): Work[] {
 }
 
 export function createQuiz(catalog: Work[], random: () => number = Math.random): Quiz {
-  if (catalog.length < WORKS_PER_QUIZ) {
-    throw new Error(`カタログには最低 ${WORKS_PER_QUIZ} 作が必要です`);
-  }
-  const quiz: Quiz = { rounds: [], index: 0, pool: shuffle(catalog, random), done: false };
-  quiz.rounds.push({ options: draw(quiz), picks: [] });
+  if (catalog.length === 0) throw new Error("設問に出せる作品がありません");
+  const total = Math.min(TOTAL_QUESTIONS, Math.ceil(catalog.length / OPTIONS_PER_QUESTION));
+  const quiz: Quiz = { rounds: [], index: 0, total, pool: shuffle(catalog, random), done: false };
+  quiz.rounds.push({ options: draw(quiz) });
   return quiz;
 }
 
 export const currentRound = (quiz: Quiz): Round => quiz.rounds[quiz.index];
 
-export const isLastQuestion = (quiz: Quiz): boolean => quiz.index + 1 >= TOTAL_QUESTIONS;
+export const isLastQuestion = (quiz: Quiz): boolean => quiz.index + 1 >= quiz.total;
 
-/** 10問すべてに答え終えたか */
+/** すべての設問に答え終えたか */
 export const isDone = (quiz: Quiz): boolean => quiz.done;
 
-/** 今の設問で作品の「好き」を付けたり外したりする。設問は進まない。 */
-export function toggle(quiz: Quiz, work: Work): void {
-  const round = currentRound(quiz);
-  if (!round.options.includes(work)) throw new Error("選択肢にない作品です");
-  const at = round.picks.indexOf(work);
-  if (at >= 0) round.picks.splice(at, 1);
-  else round.picks.push(work);
-}
-
-export const isPicked = (quiz: Quiz, work: Work): boolean => currentRound(quiz).picks.includes(work);
-
-/** 今の設問を確定して次へ進む。ひとつも選んでいなくてもよい。最後の設問なら診断に入る。 */
+/** 次の設問へ進む。最後の設問なら診断に入る。 */
 export function next(quiz: Quiz): void {
   if (quiz.done) return;
   if (isLastQuestion(quiz)) {
@@ -69,7 +58,7 @@ export function next(quiz: Quiz): void {
     return;
   }
   quiz.index++;
-  if (!quiz.rounds[quiz.index]) quiz.rounds.push({ options: draw(quiz), picks: [] });
+  if (!quiz.rounds[quiz.index]) quiz.rounds.push({ options: draw(quiz) });
 }
 
 /** ひとつ前の設問へ。診断結果からは最後の設問へ戻る。 */
@@ -81,22 +70,27 @@ export function back(quiz: Quiz): void {
   if (quiz.index > 0) quiz.index--;
 }
 
-/** 今の3作を入れ替えても、残りの設問に3作ずつ配れるか */
+/** 今の設問より先にすでに出してある作品 */
+const aheadWorks = (quiz: Quiz): Work[] => quiz.rounds.slice(quiz.index + 1).flatMap((r) => r.options);
+
+/** 今の6作を入れ替えても、今の設問と残りの設問に6作ずつ配れるか */
 export function canSwap(quiz: Quiz): boolean {
-  const remaining = TOTAL_QUESTIONS - quiz.index;
-  const alreadyDrawnAhead = quiz.rounds.length - quiz.index - 1;
-  return quiz.pool.length >= OPTIONS_PER_QUESTION * (remaining - alreadyDrawnAhead);
+  const need = OPTIONS_PER_QUESTION * (quiz.total - quiz.index);
+  return quiz.pool.length + aheadWorks(quiz).length >= need;
 }
 
-/** 「3つとも知らない」: 今の3作を捨てて別の3作にする。先の設問は引き直しになる。 */
+/**
+ * 「6つとも知らない」: 今の6作を捨てて別の6作にする。
+ * 先の設問は引き直しになり、そこに出ていた作品は山に戻す。
+ */
 export function swap(quiz: Quiz): boolean {
   if (!canSwap(quiz)) return false;
-  quiz.rounds[quiz.index] = { options: draw(quiz), picks: [] };
-  quiz.rounds.length = quiz.index + 1;
+  // 戻した作品は山の後ろへ。入れ替え後の6作は、まだ出していない作品から引く
+  quiz.pool.push(...aheadWorks(quiz));
+  quiz.rounds.length = quiz.index;
+  quiz.rounds.push({ options: draw(quiz) });
   return true;
 }
 
-export const pickedWorks = (quiz: Quiz): Work[] => quiz.rounds.flatMap((r) => r.picks);
-
-export const passedWorks = (quiz: Quiz): Work[] =>
-  quiz.rounds.flatMap((r) => r.options.filter((w) => !r.picks.includes(w)));
+/** これまでの設問に出した作品 */
+export const shownWorks = (quiz: Quiz): Work[] => quiz.rounds.flatMap((r) => r.options);
