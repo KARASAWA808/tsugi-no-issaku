@@ -14,9 +14,12 @@
  *     テレビアニメ、アニメ映画、ゲーム)の項目のうち、正規化した題名がただ1つ一致するもの。
  *
  * 出力(どれも読める JSON):
- *   data/madb/manga.json, anime.json, game.json  取り込んだ全作品(未整備も含む)。1行1作品
- *   data/madb/tagged.json                        タグ付けできた作品だけ。サイトが読む
- *   data/madb/summary.json                       件数と元データの版
+ *   data/madb/tagged.json            タグ付けできた作品だけ(サイトが読む)。リポジトリに入れる
+ *   data/madb/summary.json           件数と元データの版。リポジトリに入れる
+ *   data/madb/unmapped-genres.json   対応表に当たらなかったジャンル語の上位。リポジトリに入れる
+ *   .cache/madb/works/manga.json, anime.json, game.json
+ *                                    取り込んだ全作品(未整備も含む)。1行1作品。大きいのでリポジトリには入れず、
+ *                                    `npm run import -- --offline` でいつでも作り直せる
  *
  * ジャンル語 → タグの対応は src/tagmap.ts、題名の正規化は src/imported.ts(Node 22.18 以上なら型を外して直接読める)。
  * プロキシ経由の環境では NODE_USE_ENV_PROXY=1 を付けると HTTPS_PROXY を使う。
@@ -31,6 +34,8 @@ import { titleKey } from "../src/imported.ts";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CACHE = path.join(ROOT, ".cache", "madb");
 const OUT = path.join(ROOT, "data", "madb");
+/** 未整備も含む全作品の置き場。リポジトリには入れない */
+const WORKS_OUT = path.join(CACHE, "works");
 const OFFLINE = process.argv.includes("--offline");
 const UA = "tsugi-no-issaku-import/0.1 (https://github.com/KARASAWA808/tsugi-no-issaku)";
 
@@ -344,6 +349,7 @@ async function main() {
   }
 
   fs.mkdirSync(OUT, { recursive: true });
+  fs.mkdirSync(WORKS_OUT, { recursive: true });
   const lines = (list) => "[\n" + list.map((w) => "  " + JSON.stringify(w)).join(",\n") + "\n]\n";
   const files = { 漫画: "manga.json", アニメ: "anime.json", ゲーム: "game.json" };
   const today = new Date().toISOString().slice(0, 10);
@@ -358,7 +364,7 @@ async function main() {
   };
   for (const [media, file] of Object.entries(files)) {
     const list = out.filter((w) => w.media === media);
-    fs.writeFileSync(path.join(OUT, file), lines(list));
+    fs.writeFileSync(path.join(WORKS_OUT, file), lines(list));
     summary.byMedia[media] = {
       total: list.length,
       tagged: list.filter((w) => w.status === "tagged").length,
@@ -379,6 +385,7 @@ async function main() {
   fs.writeFileSync(path.join(OUT, "unmapped-genres.json"), JSON.stringify(Object.fromEntries(top), null, 2) + "\n");
 
   console.error(JSON.stringify(summary, null, 2));
+  console.error(`全作品(未整備を含む)は ${WORKS_OUT} に書きました`);
 }
 
 main().catch((e) => {

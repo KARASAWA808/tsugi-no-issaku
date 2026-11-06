@@ -4,6 +4,7 @@ import tagged from "../data/madb/tagged.json";
 import { CATALOG, MEDIA, keyOf, type Work } from "../src/catalog";
 import { diagnose } from "../src/diagnose";
 import { MADB_ID_URL, MADB_KEY_PREFIX, isImportedEntry, mergeImported, titleKey, toWork } from "../src/imported";
+import { interestList, isInterested, rateAndClear, toggle, type Interest } from "../src/interest";
 import { rate, ratingOf, seenList, unseenOf, type Seen } from "../src/seen";
 import { TAGS } from "../src/tagmap";
 
@@ -65,6 +66,20 @@ describe("取り込んだ作品を Work にする", () => {
     expect(seen.get(hand.title)).toBe(5);
     expect(seenList([hand, imported], seen).map((r) => r.rating)).toEqual([5, 2]);
     expect(unseenOf([hand, imported], seen)).toEqual([]);
+  });
+
+  it("「気になる」も同じキーで付き、☆を付けると外れる", () => {
+    const hand = CATALOG[0];
+    const imported = toWork({ ...entry, title: hand.title, media: hand.media });
+    const interest: Interest = new Set();
+    toggle(interest, keyOf(imported));
+    expect(isInterested(interest, imported)).toBe(true);
+    expect(isInterested(interest, hand)).toBe(false);
+    expect(interestList([hand, imported], interest)).toEqual([imported]);
+    const seen: Seen = new Map();
+    rateAndClear(seen, interest, keyOf(imported), 4);
+    expect(interest.size).toBe(0);
+    expect(ratingOf(seen, imported)).toBe(4);
   });
 });
 

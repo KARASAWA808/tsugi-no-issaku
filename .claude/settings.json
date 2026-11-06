@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm test)",
+      "Bash(npm test *)",
+      "Bash(npm run build)",
+      "Bash(npm run typecheck)",
+      "mcp__github__pull_request_read",
+      "mcp__github__actions_list",
+      "mcp__claude-code-remote__read_documentation"
+    ]
+  }
+}
