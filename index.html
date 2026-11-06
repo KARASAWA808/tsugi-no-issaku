@@ -13,7 +13,7 @@
     <div class="wrap">
       <header>
         <h1><span>つぎの一作</span></h1>
-        <p class="lead">種類とジャンルを選んだら、6作ずつ出てくる作品のうち見たことのあるものに☆1〜5を付けてください。見ていない作品はそのままでかまいません。5問答えると、☆の評価から次にハマりそうな作品を6つ選びます。</p>
+        <p class="lead">種類とジャンルを選んだら、6作ずつ出てくる作品のうち見たことのあるものに☆1〜5を付けてください。見ていない作品はそのままでかまいません。まだ見ていないけれど興味がある作品には「気になる」を付けておけます。5問答えると、☆の評価から次にハマりそうな作品を6つ選びます。</p>
       </header>
 
       <div class="filters">
@@ -33,7 +33,7 @@
       <section class="quiz" id="quiz" aria-label="設問">
         <div class="qhead">
           <p class="qnum" id="qnum" aria-live="polite"></p>
-          <p class="qtext">見た作品に☆を付けてください<small>(見ていなければそのまま)</small></p>
+          <p class="qtext">見た作品に☆を付けてください<small>(見ていなければそのまま。興味があれば「気になる」)</small></p>
         </div>
         <div class="steps" id="steps" aria-hidden="true"></div>
         <p class="note" id="quizNote" hidden></p>
@@ -75,6 +75,15 @@
           <p class="note" id="seenWarn" hidden></p>
           <p class="note" id="seenEmpty">まだありません。設問やおすすめの☆で評価すると、ここに並びます。</p>
           <ul class="seen-list" id="seenList"></ul>
+        </div>
+      </details>
+
+      <details class="seen" id="interest">
+        <summary>気になる作品 <span class="count" id="interestCount"></span></summary>
+        <div class="seen-body">
+          <p class="note">まだ見ていないけれど興味がある作品です。タグを弱い手がかりとして診断に足しますが、おすすめの元にはしません。おすすめに出たときは「気になる」の印が付きます。☆を付けると見た作品に移り、ここからは外れます。</p>
+          <p class="note" id="interestEmpty">まだありません。設問やおすすめの「気になる」を押すと、ここに並びます。</p>
+          <ul class="seen-list" id="interestList"></ul>
         </div>
       </details>
     </div>

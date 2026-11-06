@@ -13,6 +13,8 @@
   --accent: #17657F;
   --accent-ink: #FFFFFF;
   --star: #A8650A;
+  --want: #B0346B;
+  --want-ink: #FFFFFF;
   --font-pop: "Yusei Magic", "Hiragino Maru Gothic ProN", "Yu Gothic", sans-serif;
   --font-body: "Zen Kaku Gothic New", "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif;
 }
@@ -20,7 +22,7 @@
   :root {
     --bg: #12161D; --surface: #1C222C; --ink: #E8ECEF; --muted: #9AA6B4; --line: #323B48;
     --pop: #F2C92E; --pop-ink: #1E1A0A; --pop-soft: #5E4F0C; --marker: #C2331F; --marker-ink: #FFFFFF;
-    --accent: #5DB6D1; --accent-ink: #0C1A20; --star: #F2C92E; color-scheme: dark;
+    --accent: #5DB6D1; --accent-ink: #0C1A20; --star: #F2C92E; --want: #F28CB8; --want-ink: #2A0E1B; color-scheme: dark;
   }
 }
 * { box-sizing: border-box; }
@@ -64,6 +66,8 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 }
 /* ☆を付けた作品は枠の色で分かるようにする */
 .opt.rated { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
+/* 「気になる」を付けた作品は点線の枠。☆を付けたら rated が勝つ */
+.opt.wanted { border-color: var(--want); border-style: dashed; }
 .opt .kind { align-self: flex-start; border: 1px solid var(--ink); border-radius: 999px; padding: 0 10px; font-size: .78rem; font-weight: 700; }
 .opt .name { font-weight: 700; font-size: 1.05rem; line-height: 1.45; overflow-wrap: anywhere; }
 .opt .sub { color: var(--muted); font-size: .85rem; line-height: 1.6; flex: 1; }
@@ -75,6 +79,18 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   min-width: 32px; min-height: 32px; padding: 0; border-radius: 4px;
 }
 .star:hover { background: color-mix(in srgb, var(--star) 14%, transparent); }
+/* 「気になる」の切り替え。☆とは別の色で、押している間は塗りつぶす */
+.want {
+  border: 1px solid var(--want); background: transparent; color: var(--want); border-radius: 999px;
+  padding: 2px 10px 2px 8px; font-size: .8rem; font-weight: 700; line-height: 1.6; min-height: 32px;
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.want::before { content: "♡"; font-size: 1rem; line-height: 1; }
+.want[aria-pressed="true"] { background: var(--want); color: var(--want-ink); }
+.want[aria-pressed="true"]::before { content: "♥"; }
+.want:hover { background: color-mix(in srgb, var(--want) 14%, transparent); }
+.want[aria-pressed="true"]:hover { background: var(--want); }
+.want-row { border-top: 0; padding-top: 0; }
 .qfoot { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
 .hint { color: var(--muted); font-size: .85rem; flex: 1; min-width: 12em; }
 
@@ -114,6 +130,12 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .pop-rate { display: flex; align-items: center; flex-wrap: wrap; gap: 0 8px; font-size: .82rem; font-weight: 700; }
 .pop-rate .star { color: var(--pop-ink); }
 .pop-rate .star:hover { background: color-mix(in srgb, var(--pop-ink) 12%, transparent); }
+.pop-rate .want { margin-left: auto; border-color: var(--pop-ink); color: var(--pop-ink); }
+.pop-rate .want:hover { background: color-mix(in srgb, var(--pop-ink) 12%, transparent); }
+.pop-rate .want[aria-pressed="true"], .pop-rate .want[aria-pressed="true"]:hover { background: var(--pop-ink); color: var(--pop); }
+/* 「気になる」を付けていた作品がおすすめに出たときの印。隠れた名作の印と同じ手書き風 */
+.wantmark { font-family: var(--font-pop); font-size: .9rem; background: var(--pop-ink); color: var(--pop); border-radius: 999px; padding: 0 10px; transform: rotate(-2deg); }
+.wantmark::before { content: "♥ "; }
 .pop-foot { margin-top: auto; padding-top: 10px; border-top: 2px dashed var(--pop-soft); display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; font-size: .82rem; }
 .pop-foot span { overflow-wrap: anywhere; min-width: 0; }
 .pop-foot a { color: var(--pop-ink); font-weight: 700; }
