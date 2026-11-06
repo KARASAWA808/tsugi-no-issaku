@@ -19,6 +19,8 @@ export interface ImportedEntry {
   source?: ImportSource;
   /** Wikipedia の言語版の数。知名度の目安(MADB だけ) */
   sitelinks?: number;
+  /** TMDB の人気。知名度の目安(TMDB だけ) */
+  popularity?: number;
 }
 
 export const MADB_NAME = "メディア芸術データベース";
@@ -100,6 +102,19 @@ export function mergeImported(handwritten: readonly Work[], entries: readonly un
     out.push(work);
   }
   return out;
+}
+
+/**
+ * 設問に出す候補(data/quiz-pool.json。scripts/build-quiz-pool.mjs が、取り込んだ作品から知名度の高いものを種類ごとに選んだもの)。
+ * 設問の最初から要るので、ページを開いたときに読む。読めなければ空を返し、手書きの作品だけで設問を作る。
+ */
+export async function loadQuizPool(handwritten: readonly Work[]): Promise<Work[]> {
+  try {
+    const mod = await import("../data/quiz-pool.json");
+    return mergeImported(handwritten, mod.default as unknown[]);
+  } catch {
+    return [];
+  }
 }
 
 /** 取り込んだ作品を読む。別ファイルにしてあるので、結果画面を出すまで読まずに済む。片方が読めなくても、読めた方は使う */

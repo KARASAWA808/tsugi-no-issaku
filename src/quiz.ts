@@ -1,8 +1,14 @@
-import type { Work } from "./catalog";
+import { isHandwritten, type Work } from "./catalog";
 
 /** 設問の最大数。作品が少ないとこれより短くなる */
 export const TOTAL_QUESTIONS = 5;
 export const OPTIONS_PER_QUESTION = 6;
+/**
+ * 1問に必ず入れる手書きの作品の数(山に残っているあいだ)。
+ * 取り込んだ作品は手書きの10倍ほどあるので、ただまぜると手書きがほとんど出なくなる。
+ * 手書きにはひとことと「隠れた名作」の印があり、知られた作品がそろっているので、毎問2作は手書きにする
+ */
+export const HANDWRITTEN_PER_QUESTION = 2;
 /** 1回の診断で出す作品数の上限 */
 export const WORKS_PER_QUIZ = TOTAL_QUESTIONS * OPTIONS_PER_QUESTION;
 
@@ -31,8 +37,20 @@ export function shuffle<T>(items: T[], random: () => number = Math.random): T[] 
   return a;
 }
 
+/**
+ * 山から6作引く。山(シャッフル済み)の先頭から順に取るが、手書きの作品が山にあれば先に2作まで拾い、残りを先頭から埋める。
+ * 手書きが尽きれば、取り込んだ作品だけになる。山に6作なければある分だけ
+ */
 function draw(quiz: Quiz): Work[] {
-  return quiz.pool.splice(0, OPTIONS_PER_QUESTION);
+  const picked: Work[] = [];
+  for (let i = 0; i < quiz.pool.length && picked.length < HANDWRITTEN_PER_QUESTION; i++) {
+    if (isHandwritten(quiz.pool[i])) picked.push(quiz.pool[i]);
+  }
+  for (let i = 0; i < quiz.pool.length && picked.length < OPTIONS_PER_QUESTION; i++) {
+    if (!picked.includes(quiz.pool[i])) picked.push(quiz.pool[i]);
+  }
+  quiz.pool = quiz.pool.filter((w) => !picked.includes(w));
+  return picked;
 }
 
 export function createQuiz(catalog: Work[], random: () => number = Math.random): Quiz {

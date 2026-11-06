@@ -13,7 +13,7 @@
     <div class="wrap">
       <header>
         <h1><span>つぎの一作</span></h1>
-        <p class="lead">種類とジャンルを選んだら、6作ずつ出てくる作品のうち見たことのあるものに☆1〜5を付けてください。見ていない作品はそのままでかまいません。まだ見ていないけれど興味がある作品には「気になる」を付けておけます。5問答えると、☆の評価から次にハマりそうな作品を6つ選びます。</p>
+        <p class="lead">種類とジャンルを選んだら、6作ずつ出てくる作品のうち見たことのあるものに☆1〜5を付けてください。見ていない作品はそのままでかまいません。まだ見ていないけれど興味がある作品には「気になる」を付けておけます。5問答えると、☆の評価から次にハマりそうな作品を6つ選びます。設問には手書きの作品のほか、メディア芸術データベースと TMDB から取り込んだ作品(発表年とタグ付き)も出ます。</p>
       </header>
 
       <div class="filters">
@@ -57,7 +57,7 @@
         <div class="shelf" id="shelf"></div>
         <section class="db" id="dbSection" aria-label="データベースからのおすすめ" hidden>
           <h2 class="db-title">データベースからも</h2>
-          <p class="note"><a href="https://mediaarts-db.artmuseums.go.jp/" target="_blank" rel="noopener">メディア芸術データベース</a>(漫画・アニメ・ゲーム)と <a href="https://www.themoviedb.org/" target="_blank" rel="noopener">TMDB</a>(映画・ドラマ)から取り込んだ作品のうち、ジャンルからタグを付けられたものです。ひとこと紹介はまだありません。出典はカードのリンクで分かります。</p>
+          <p class="note"><a href="https://mediaarts-db.artmuseums.go.jp/" target="_blank" rel="noopener">メディア芸術データベース</a>(漫画・アニメ・ゲーム)と <a href="https://www.themoviedb.org/" target="_blank" rel="noopener">TMDB</a>(映画・ドラマ・アニメ)から取り込んだ作品のうち、ジャンルからタグを付けられたものです。同じ題名のアニメは TMDB の方を出します。ひとこと紹介はまだありません。出典はカードのリンクで分かります。</p>
           <p class="note" id="dbNote" hidden></p>
           <div class="shelf" id="dbShelf"></div>
         </section>
@@ -94,7 +94,7 @@
       </details>
 
       <footer class="credit">
-        <p class="note">映画とドラマのデータは <a href="https://www.themoviedb.org/" target="_blank" rel="noopener"><img class="tmdb-logo" src="./tmdb-logo.svg" alt="TMDB" width="120" height="10" /></a> の API から取得しています。このサイトは TMDB の API を使っていますが、TMDB に承認・認定されたものではありません(This product uses the TMDB API but is not endorsed or certified by TMDB)。日本での配信情報は <a href="https://www.justwatch.com/" target="_blank" rel="noopener">JustWatch</a> の提供です。</p>
+        <p class="note">映画・ドラマ・アニメのデータは <a href="https://www.themoviedb.org/" target="_blank" rel="noopener"><img class="tmdb-logo" src="./tmdb-logo.svg" alt="TMDB" width="120" height="10" /></a> の API から取得しています。このサイトは TMDB の API を使っていますが、TMDB に承認・認定されたものではありません(This product uses the TMDB API but is not endorsed or certified by TMDB)。日本での配信情報は <a href="https://www.justwatch.com/" target="_blank" rel="noopener">JustWatch</a> の提供です。</p>
         <p class="note">作品データの一部は、<a href="https://mediaarts-db.artmuseums.go.jp/" target="_blank" rel="noopener">メディア芸術データベース</a>(文化庁・独立行政法人国立美術館 国立アートリサーチセンター)の<a href="https://github.com/mediaarts-db/dataset" target="_blank" rel="noopener">データセット</a>をもとにしています。このデータセットは自由な二次利用が可能です。このサイトでは、作品の抜き出し・題名の整理・ジャンルからの好みタグ付けなどの編集・加工をしており、その結果は元データの提供元によるものではありません。ジャンルの補いには <a href="https://www.wikidata.org/" target="_blank" rel="noopener">Wikidata</a>(CC0)も使っています。</p>
       </footer>
     </div>

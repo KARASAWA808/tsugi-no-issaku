@@ -266,8 +266,9 @@ async function main() {
       untagged: list.filter((w) => w.status === "untagged").length,
     };
   }
+  // popularity は設問用の候補(scripts/build-quiz-pool.mjs)で知名度の目安に使う
   const tagged = out.filter((w) => w.status === "tagged")
-    .map((w) => ({ id: w.id, title: w.title, media: w.media, year: w.year, tags: w.tags, source: "tmdb" }));
+    .map((w) => ({ id: w.id, title: w.title, media: w.media, year: w.year, tags: w.tags, source: "tmdb", popularity: Math.round((w.popularity ?? 0) * 10) / 10 }));
   // 結果画面で読むチャンクが大きくなりすぎないよう、アニメは別ファイルにする
   fs.writeFileSync(path.join(OUT, "tagged.json"), lines(tagged.filter((w) => w.media !== "アニメ")));
   fs.writeFileSync(path.join(OUT, "anime.json"), lines(tagged.filter((w) => w.media === "アニメ")));

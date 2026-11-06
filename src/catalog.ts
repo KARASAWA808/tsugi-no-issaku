@@ -26,6 +26,9 @@ export interface Work {
 /** 評価の保存に使うキー。id があればそれ、なければ作品名 */
 export const keyOf = (work: Work): string => work.id ?? work.title;
 
+/** 手書きの作品か(外部データベースから取り込んだ作品には source がある) */
+export const isHandwritten = (work: Work): boolean => work.source === undefined;
+
 /** 設問と診断に使う作品カタログ。作品を増やすときはここに1行足す。 */
 export const CATALOG: Work[] = [
   { title: "ONE PIECE", media: "漫画", tags: ["冒険", "仲間", "バトル", "世界観"], pitch: "仲間と海へ、王道の大冒険" },
