@@ -41,6 +41,8 @@ function saveSeen() {
 
 const seen = loadSeen();
 let quiz: Quiz;
+/** おすすめのカードで評価したときの一言。カードはすぐ消えるので、ここで保存を知らせる */
+let rateMessage = "";
 const mediaFilter = new Set<Media>();
 
 /** 描き直しても、押していたボタンにフォーカスを戻す */
@@ -78,6 +80,7 @@ function stars(work: Work, scope: string, opts: { clearable: boolean }) {
     b.onclick = () => {
       if (opts.clearable && current === n) unrate(seen, work.title);
       else rate(seen, work.title, n as Rating);
+      if (scope === "pop") rateMessage = `『${work.title}』を星${n}で見た作品に入れました。付け直しや取り消しは下の「見た作品」からできます。`;
       onSeenChange();
     };
     row.append(b);
@@ -87,6 +90,7 @@ function stars(work: Work, scope: string, opts: { clearable: boolean }) {
 
 // ---- 設問 ----
 function start() {
+  rateMessage = "";
   const { works, filled } = quizCatalog(CATALOG, seen);
   quiz = createQuiz(works);
   const note = $("quizNote");
@@ -203,6 +207,8 @@ function renderResult() {
       return card;
     }),
   );
+
+  $("rateNote").textContent = rateMessage;
 
   $("picks").textContent = picked.length
     ? `あなたが「好き」と選んだ${picked.length}作: ` + picked.map((w) => `『${w.title}』`).join(" ")
