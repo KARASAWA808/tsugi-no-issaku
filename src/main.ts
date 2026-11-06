@@ -1,7 +1,7 @@
 import "./style.css";
 import { CATALOG, MEDIA, keyOf, type Media, type Work } from "./catalog";
 import { LIKED_RATING, diagnose, type Recommendation } from "./diagnose";
-import { loadImported } from "./imported";
+import { loadImported, loadQuizPool } from "./imported";
 import { MOODS, matches, type Filter } from "./filter";
 import {
   interestList, isInterested, parseInterest, rateAndClear, serializeInterest, toggle, unmark, type Interest,
@@ -78,9 +78,23 @@ let rateMessage = "";
 let imported: Work[] = [];
 /** 取り込んだ作品を読めなかったとき */
 let importedError = false;
+/**
+ * 設問に出す、取り込んだ作品の候補(知名度の高いものを種類ごとに選んだもの)。ページを開いたときに読む。
+ * 読めなければ空のままで、設問は手書きの作品だけになる
+ */
+let quizPool: Work[] = [];
 
-/** 手書きの作品と取り込んだ作品を合わせた全作品。評価と「気になる」の一覧と、診断の元に使う */
-const allWorks = (): Work[] => imported.length ? CATALOG.concat(imported) : CATALOG;
+/**
+ * 手書きの作品と取り込んだ作品を合わせた全作品。評価と「気になる」の一覧と、診断の元に使う。
+ * 設問の候補は取り込んだ作品の一部だが、おすすめ用の一覧が読めていないあいだも評価が数えられるよう、重ならない分を足す
+ */
+function allWorks(): Work[] {
+  const ids = new Set(imported.map((w) => w.id));
+  return CATALOG.concat(imported, quizPool.filter((w) => !ids.has(w.id)));
+}
+
+/** 設問に使う作品。手書きの全作と、取り込んだ作品の候補 */
+const quizWorks = (): Work[] => CATALOG.concat(quizPool);
 
 const filterOf = (gemsOnly = false): Filter => ({ media, moods, gemsOnly });
 
@@ -196,7 +210,7 @@ function afterFilterChange() {
 /** 今の種類とジャンルで設問を作る。条件に合う作品がなければ quiz は null */
 function rebuildQuiz() {
   rateMessage = "";
-  const { works, filled } = quizCatalog(CATALOG.filter((w) => matches(w, filterOf())), seen);
+  const { works, filled } = quizCatalog(quizWorks().filter((w) => matches(w, filterOf())), seen);
   ratedAtStart = new Set(works.filter((w) => ratingOf(seen, w) !== undefined).map((w) => keyOf(w)));
   if (works.length === 0) {
     quiz = null;
@@ -259,7 +273,13 @@ function renderQuestion() {
       const card = el("div", "opt" + (rated ? " rated" : wanted ? " wanted" : ""));
       const rateRow = el("div", "rate");
       rateRow.append(el("span", "rate-label", rated ? "見た" : "見たなら"), stars(work, "q", { clearable: true }));
-      card.append(el("span", "kind", work.media), el("span", "name", work.title), el("span", "sub", work.pitch), rateRow);
+      // 取り込んだ作品にはひとことがないので、代わりに発表年とタグを出す(出典へのリンクは設問では出さない)
+      const sub = work.pitch ? el("span", "sub", work.pitch) : el("span", "sub chips");
+      if (!work.pitch) {
+        if (work.year) sub.append(el("span", "year", `${work.year}年`));
+        sub.append(...work.tags.map((t) => el("span", "tag", t)));
+      }
+      card.append(el("span", "kind", work.media), el("span", "name", work.title), sub, rateRow);
       // ☆を付けた作品は見たことになるので、「気になる」は出さない
       if (!rated) {
         const wantRow = el("div", "rate want-row");
@@ -439,7 +459,10 @@ $("retryBtn").onclick = start;
 renderFilter();
 renderSeen();
 renderInterest();
-start();
+// 設問の候補は小さいので、読んでから設問を始める。読めなければ手書きの作品だけで始める
+loadQuizPool(CATALOG).then((works) => {
+  quizPool = works;
+}).finally(start);
 
 // 取り込んだ作品は量が多いので、画面を出してから読む。読めなくても手書きの作品だけで動く
 loadImported(CATALOG).then((works) => {

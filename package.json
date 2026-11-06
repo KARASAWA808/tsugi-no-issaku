@@ -10,7 +10,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "import": "node --no-warnings scripts/import-madb.mjs",
-    "import:tmdb": "node --no-warnings scripts/import-tmdb.mjs"
+    "import:tmdb": "node --no-warnings scripts/import-tmdb.mjs",
+    "quiz-pool": "node --no-warnings scripts/build-quiz-pool.mjs"
   },
   "devDependencies": {
     "typescript": "^5.6.3",

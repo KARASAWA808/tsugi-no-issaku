@@ -121,6 +121,9 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .pop:hover { transform: rotate(0); }
 .pop-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .pop .year { margin-left: auto; font-size: .8rem; color: var(--pop-soft); font-weight: 700; }
+.opt .sub.chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.opt .sub.chips .year { font-size: .8rem; color: var(--muted); }
+.opt .sub.chips .tag { font-size: .75rem; padding: 0 9px; }
 .pop .chips .tag { border-color: var(--pop-ink); color: var(--pop-ink); }
 .media { background: var(--marker); color: var(--marker-ink); font-weight: 700; font-size: .8rem; padding: 1px 10px; border-radius: 2px; }
 /* 隠れた名作の印。POPカードの右上に手書き風で出す */
