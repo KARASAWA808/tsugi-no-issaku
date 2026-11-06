@@ -26,6 +26,17 @@ describe("catalog", () => {
       expect(CATALOG.filter((w) => w.media === m).length, m).toBeGreaterThan(0);
     }
   });
+  it("タグは決まった18個だけを使い、1作に2〜4個", () => {
+    const allowed = new Set([
+      "冒険", "仲間", "バトル", "世界観", "ダーク", "サスペンス", "頭脳戦", "ファンタジー", "切なさ",
+      "日常", "成長", "感動", "笑い", "哲学", "歴史", "恋愛", "SF", "ミステリー",
+    ]);
+    for (const w of CATALOG) {
+      expect(w.tags.length, w.title).toBeGreaterThanOrEqual(2);
+      expect(w.tags.length, w.title).toBeLessThanOrEqual(4);
+      for (const t of w.tags) expect(allowed.has(t), `${w.title}: ${t}`).toBe(true);
+    }
+  });
   it("タグは他の作品とも共有されている(孤立タグがない)", () => {
     const count = new Map<string, number>();
     for (const w of CATALOG) for (const t of w.tags) count.set(t, (count.get(t) ?? 0) + 1);
