@@ -142,6 +142,21 @@ describe("quiz", () => {
     }
   });
 
+  it("最後の設問が短くなっても残りが出せるなら入れ替えられる", () => {
+    const quiz = createQuiz(CATALOG.slice(0, 32), seeded(8));
+    expect(quiz.total).toBe(TOTAL_QUESTIONS);
+    expect(canSwap(quiz)).toBe(true);
+    expect(swap(quiz)).toBe(true);
+    expect(canSwap(quiz)).toBe(false);
+    const sizes = [];
+    for (let i = 0; i < TOTAL_QUESTIONS; i++) {
+      sizes.push(currentRound(quiz).options.length);
+      next(quiz);
+    }
+    expect(sizes).toEqual([6, 6, 6, 6, 2]);
+    expect(isDone(quiz)).toBe(true);
+  });
+
   it("作品が少ないと入れ替えはできない", () => {
     expect(canSwap(createQuiz(CATALOG.slice(0, 12), seeded(7)))).toBe(false);
   });

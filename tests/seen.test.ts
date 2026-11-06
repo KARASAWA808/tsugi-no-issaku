@@ -141,6 +141,19 @@ describe("☆の評価だけで診断する", () => {
     expect(d.summary).toContain("☆を付けた作品がなかった");
   });
 
+  it("高い評価と低い評価が打ち消し合っても、おすすめは出て、説明はその理由を言う", () => {
+    // 同じタグの2作を☆4と☆1にすると、タグの点が 0.5 − 1 で打ち消される
+    const mk = (title: string): Work => ({ title, media: "漫画", tags: ["頭脳戦", "サスペンス"], pitch: "-" });
+    const [good, bad, other] = [mk("A"), mk("B"), mk("C")];
+    const ratings = [{ work: good, rating: 4 as const }, { work: bad, rating: 1 as const }];
+    const d = diagnose({ ratings, catalog: [good, bad, other] });
+    expect(d.tags).toEqual([]);
+    expect(d.typeName).toBe("まだ見えない派");
+    expect(d.recommendations.length).toBeGreaterThan(0);
+    expect(d.summary).toContain("打ち消し合って");
+    expect(d.summary).not.toContain("☆4以上を付けた作品がまだない");
+  });
+
   it("おすすめの元はいつも☆4以上で、重なりが同じなら☆5を優先する", () => {
     const ratings = [...ratedAs(brainy.slice(0, 3), 4), ...ratedAs(brainy.slice(3, 6), 5), ...ratedAs(cozy.slice(0, 3), 2)];
     const d = diagnose({ ratings, catalog: CATALOG, count: CATALOG.length });

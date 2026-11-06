@@ -73,9 +73,12 @@ export function back(quiz: Quiz): void {
 /** 今の設問より先にすでに出してある作品 */
 const aheadWorks = (quiz: Quiz): Work[] => quiz.rounds.slice(quiz.index + 1).flatMap((r) => r.options);
 
-/** 今の6作を入れ替えても、今の設問と残りの設問に6作ずつ配れるか */
+/**
+ * 今の6作を捨てても、残りの設問がすべて出せるか。
+ * createQuiz と同じく最後の設問は短くてもよいので、先の設問に6作ずつと、最後に1作あれば足りる。
+ */
 export function canSwap(quiz: Quiz): boolean {
-  const need = OPTIONS_PER_QUESTION * (quiz.total - quiz.index);
+  const need = OPTIONS_PER_QUESTION * (quiz.total - quiz.index - 1) + 1;
   return quiz.pool.length + aheadWorks(quiz).length >= need;
 }
 
