@@ -1,6 +1,7 @@
 import "./style.css";
 import { CATALOG, MEDIA, type Media, type Work } from "./catalog";
 import { LIKED_RATING, diagnose } from "./diagnose";
+import { MOODS, matches, type Filter } from "./filter";
 import {
   TOTAL_QUESTIONS, back, canSwap, createQuiz, currentRound, isDone, isLastQuestion, next, shownWorks, swap,
   type Quiz,
@@ -20,6 +21,7 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: 
 // ---- このブラウザの localStorage への保存。使えない環境ではメモリだけで動く ----
 const SEEN_KEY = "tsugi-no-issaku:seen";
 const MEDIA_KEY = "tsugi-no-issaku:media";
+const MOODS_KEY = "tsugi-no-issaku:moods";
 let storageOk = true;
 
 function load(key: string): string | null {
@@ -51,14 +53,27 @@ function loadMedia(): Set<Media> {
   }
 }
 
+/** 保存していたジャンル。読めなければ指定なし(すべて) */
+function loadMoods(): Set<string> {
+  try {
+    const list = JSON.parse(load(MOODS_KEY) ?? "[]");
+    return new Set(Array.isArray(list) ? list.filter((m) => MOODS.some((x) => x.name === m)) : []);
+  } catch {
+    return new Set();
+  }
+}
+
 const seen: Seen = parse(load(SEEN_KEY));
 const media = loadMedia();
+const moods = loadMoods();
+/** 結果画面で種類やジャンルを変えたら、設問に戻るときに出し直す */
+let quizStale = false;
 /** 条件に合う作品がないときは null。そのあいだ設問のボタンは押せない */
 let quiz: Quiz | null = null;
 /** おすすめのカードで評価したときの一言。カードはすぐ消えるので、ここで保存を知らせる */
 let rateMessage = "";
 
-const inMedia = (w: Work) => media.has(w.media);
+const filterOf = (gemsOnly = false): Filter => ({ media, moods, gemsOnly });
 
 /** 描き直しても、押していたボタンにフォーカスを戻す */
 function keepFocus(render: () => void) {
@@ -106,42 +121,58 @@ function stars(work: Work, scope: string, opts: { clearable: boolean }) {
   return row;
 }
 
-// ---- 診断する種類のチェック ----
-function renderFilter() {
-  const box = $("mediaChecks");
-  box.replaceChildren();
-  for (const m of MEDIA) {
-    const label = el("label", "check");
-    const input = el("input");
-    input.type = "checkbox";
-    input.checked = media.has(m);
-    input.onchange = () => onMediaChange(m, input);
-    label.append(input, el("span", undefined, m));
-    box.append(label);
-  }
+// ---- 診断する種類とジャンルのチェック ----
+function checkbox(label: string, checked: boolean, onChange: (input: HTMLInputElement) => void) {
+  const wrap = el("label", "check");
+  const input = el("input");
+  input.type = "checkbox";
+  input.checked = checked;
+  input.onchange = () => onChange(input);
+  wrap.append(input, el("span", undefined, label));
+  return wrap;
 }
 
+function renderFilter() {
+  $("mediaChecks").replaceChildren(...MEDIA.map((m) => checkbox(m, media.has(m), (input) => onMediaChange(m, input))));
+  $("moodChecks").replaceChildren(...MOODS.map(({ name }) => checkbox(name, moods.has(name), (input) => {
+    if (input.checked) moods.add(name); else moods.delete(name);
+    store(MOODS_KEY, JSON.stringify([...moods]));
+    afterFilterChange();
+  })));
+}
+
+const MEDIA_NOTE = "1つ以上選んでください。複数選べます。";
+
 function onMediaChange(m: Media, input: HTMLInputElement) {
-  const note = $("filterNote");
+  const note = $("mediaNote");
   if (!input.checked && media.size === 1) {
     input.checked = true;
-    note.textContent = "1つ以上選んでください。";
+    note.textContent = "最後の1つは外せません。ほかの種類を選んでから外してください。";
     note.classList.add("warn");
     return;
   }
+  note.textContent = MEDIA_NOTE;
+  note.classList.remove("warn");
   if (input.checked) media.add(m); else media.delete(m);
   store(MEDIA_KEY, JSON.stringify([...media]));
-  note.textContent = "種類を変えると、設問を最初から出し直します。付けた☆はそのまま残ります。";
-  note.classList.remove("warn");
-  // 結果画面ではおすすめだけを選び直し、設問の途中なら出し直す
-  if (!$("result").hidden) renderResult();
-  else start();
+  afterFilterChange();
+}
+
+/** 結果画面ではおすすめだけを選び直し、設問の途中なら出し直す */
+function afterFilterChange() {
+  if (!$("result").hidden) {
+    quizStale = true;
+    renderResult();
+  } else {
+    start();
+  }
 }
 
 // ---- 設問 ----
 function start() {
   rateMessage = "";
-  const { works, filled } = quizCatalog(CATALOG.filter(inMedia), seen);
+  quizStale = false;
+  const { works, filled } = quizCatalog(CATALOG.filter((w) => matches(w, filterOf())), seen);
   if (works.length === 0) {
     quiz = null;
     showEmptyQuiz();
@@ -149,7 +180,7 @@ function start() {
   }
   quiz = createQuiz(works);
   const notes = [];
-  if (quiz.total < TOTAL_QUESTIONS) notes.push(`選んだ種類の作品が少ないので、設問は${quiz.total}問です。`);
+  if (quiz.total < TOTAL_QUESTIONS) notes.push(`選んだ種類やジャンルの作品が少ないので、設問は${quiz.total}問です。`);
   if (filled) notes.push(`まだ評価していない作品が少ないので、評価済みの作品も${filled}作まぜています。☆を付け直せます。`);
   const note = $("quizNote");
   note.hidden = notes.length === 0;
@@ -230,7 +261,8 @@ function onNext() {
 function renderResult() {
   const ratings = seenList(CATALOG, seen);
   const likedCount = ratings.filter((r) => r.rating >= LIKED_RATING).length;
-  const d = diagnose({ ratings, catalog: CATALOG, media });
+  const gemsOnly = $<HTMLInputElement>("gemsOnly").checked;
+  const d = diagnose({ ratings, catalog: CATALOG.filter((w) => matches(w, filterOf(gemsOnly))), count: 6 });
 
   $("typeName").textContent = d.typeName;
   $("typeSummary").textContent = d.summary;
@@ -243,13 +275,16 @@ function renderResult() {
     ? "☆を付けた作品がないので、おすすめを出せませんでした。「設問に戻る」から、見た作品に☆を付けてください。"
     : likedCount === 0
       ? "☆4以上を付けた作品がないので、おすすめを出せませんでした。好きだった作品に☆4〜5を付けてみてください。"
-      : "選んだ種類で、まだ評価していない作品の中に好みに合うものが見つかりませんでした。診断する種類を増やしてみてください。";
+      : gemsOnly
+        ? "選んだ種類やジャンルの隠れた名作で、まだ評価していないものの中に好みに合う作品が見つかりませんでした。「隠れた名作だけ」を外すか、種類やジャンルを増やしてみてください。"
+        : "選んだ種類やジャンルで、まだ評価していない作品の中に好みに合うものが見つかりませんでした。種類やジャンルを増やしてみてください。";
 
   $("shelf").replaceChildren(
     ...d.recommendations.map(({ work, from, fromRating, shared }) => {
       const card = el("article", "pop");
       const top = el("div", "pop-top");
       top.append(el("span", "media", work.media));
+      if (work.gem) top.append(el("span", "surprise", "隠れた名作"));
       const rateRow = el("div", "pop-rate");
       rateRow.append(el("span", undefined, "もう見た?"), stars(work, "pop", { clearable: false }));
       const foot = el("div", "pop-foot");
@@ -305,7 +340,11 @@ function renderSeen() {
 $("nextBtn").onclick = onNext;
 $("backBtn").onclick = () => { if (quiz) { back(quiz); renderQuestion(); } };
 $("swapBtn").onclick = () => { if (quiz && swap(quiz)) renderQuestion(); };
-$("fixBtn").onclick = () => { if (quiz) { back(quiz); showQuiz(); } };
+$("fixBtn").onclick = () => {
+  if (!quiz || quizStale) start();
+  else { back(quiz); showQuiz(); }
+};
+$("gemsOnly").onchange = renderResult;
 $("retryBtn").onclick = start;
 
 renderFilter();

@@ -1,4 +1,4 @@
-import type { Media, Work } from "./catalog";
+import type { Work } from "./catalog";
 import type { Rating } from "./seen";
 
 export interface Rated {
@@ -27,9 +27,8 @@ export interface Diagnosis {
 export interface DiagnoseInput {
   /** 自分で付けた☆評価。診断はこれだけを使う */
   ratings: Rated[];
+  /** おすすめを選ぶ作品。種類やジャンルでしぼるときは、しぼってから渡す */
   catalog: Work[];
-  /** 空ならすべての種類から選ぶ */
-  media?: ReadonlySet<Media>;
   count?: number;
 }
 
@@ -46,7 +45,7 @@ export function tagScores(ratings: Rated[]): Map<string, number> {
   return scores;
 }
 
-export function diagnose({ ratings, catalog, media, count = 6 }: DiagnoseInput): Diagnosis {
+export function diagnose({ ratings, catalog, count = 6 }: DiagnoseInput): Diagnosis {
   // 同じ作品が2回来たら後の評価を使う
   const byWork = new Map(ratings.map((r) => [r.work, r.rating] as const));
   const rated = [...byWork].map(([work, rating]) => ({ work, rating }));
@@ -59,7 +58,7 @@ export function diagnose({ ratings, catalog, media, count = 6 }: DiagnoseInput):
   const liked = rated.filter((r) => r.rating >= LIKED_RATING).sort((a, b) => b.rating - a.rating);
 
   const recommendations = catalog
-    .filter((w) => !byWork.has(w) && (!media?.size || media.has(w.media)))
+    .filter((w) => !byWork.has(w))
     .flatMap((work): Recommendation[] => {
       let best: Rated | null = null;
       let shared: string[] = [];

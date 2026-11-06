@@ -105,7 +105,8 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .pop:hover { transform: rotate(0); }
 .pop-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .media { background: var(--marker); color: var(--marker-ink); font-weight: 700; font-size: .8rem; padding: 1px 10px; border-radius: 2px; }
-.surprise { font-family: var(--font-pop); font-size: .9rem; }
+/* 隠れた名作の印。POPカードの右上に手書き風で出す */
+.surprise { font-family: var(--font-pop); font-size: .9rem; border: 2px solid var(--pop-ink); border-radius: 999px; padding: 0 10px; transform: rotate(3deg); }
 .pitch { font-family: var(--font-pop); font-size: 1.45rem; line-height: 1.35; text-wrap: balance; }
 .pop h3 { font-size: 1.05rem; font-weight: 700; line-height: 1.5; overflow-wrap: anywhere; }
 .creator { font-size: .82rem; color: var(--pop-soft); font-weight: 500; }
@@ -123,7 +124,8 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .note { color: var(--muted); font-size: .85rem; }
 .note.warn { color: var(--ink); border-left: 4px solid var(--marker); padding-left: 10px; }
 
-/* 診断する種類のチェック。本物のチェックボックスを丸いラベルで包む */
+.filters { display: flex; flex-direction: column; gap: 16px; }
+/* 診断する種類とジャンルのチェック。本物のチェックボックスを丸いラベルで包む */
 .filter { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .filter legend { font-weight: 700; font-size: .9rem; padding: 0; margin-bottom: 8px; }
 .checks { display: flex; flex-wrap: wrap; gap: 8px; }

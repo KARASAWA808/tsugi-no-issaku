@@ -13,14 +13,22 @@
     <div class="wrap">
       <header>
         <h1><span>つぎの一作</span></h1>
-        <p class="lead">6作ずつ出てくるので、見たことのある作品に☆1〜5を付けてください。見ていない作品はそのままでかまいません。5問答えると、☆の評価から次にハマりそうな作品を6つ選びます。</p>
+        <p class="lead">種類とジャンルを選んだら、6作ずつ出てくる作品のうち見たことのあるものに☆1〜5を付けてください。見ていない作品はそのままでかまいません。5問答えると、☆の評価から次にハマりそうな作品を6つ選びます。</p>
       </header>
 
-      <fieldset class="filter" id="filter">
-        <legend>診断する種類</legend>
-        <div class="checks" id="mediaChecks"></div>
-        <p class="note" id="filterNote">種類を変えると、設問を最初から出し直します。付けた☆はそのまま残ります。</p>
-      </fieldset>
+      <div class="filters">
+        <fieldset class="filter">
+          <legend>診断する種類</legend>
+          <div class="checks" id="mediaChecks"></div>
+          <p class="note" id="mediaNote">1つ以上選んでください。複数選べます。</p>
+        </fieldset>
+        <fieldset class="filter">
+          <legend>ジャンル</legend>
+          <div class="checks" id="moodChecks"></div>
+          <p class="note" id="moodNote">選ばなければ、すべてのジャンルから出します。複数選ぶと、どれかに当たる作品を出します。</p>
+        </fieldset>
+        <p class="note">種類やジャンルを変えると、設問を最初から出し直します。付けた☆はそのまま残ります。</p>
+      </div>
 
       <section class="quiz" id="quiz" aria-label="設問">
         <div class="qhead">
@@ -49,6 +57,9 @@
         <div class="shelf" id="shelf"></div>
         <p class="note" id="rateNote" role="status"></p>
         <div class="after">
+          <div class="row">
+            <label class="check"><input type="checkbox" id="gemsOnly" /><span>隠れた名作だけをおすすめする</span></label>
+          </div>
           <div class="row">
             <button type="button" class="btn btn-quiet" id="fixBtn">設問に戻る</button>
             <button type="button" class="btn btn-main" id="retryBtn">最初からやり直す</button>
