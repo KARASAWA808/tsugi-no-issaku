@@ -82,9 +82,11 @@ export function diagnose({ ratings, catalog, count = 6 }: DiagnoseInput): Diagno
       : "まだ見えない派",
     summary: !rated.length
       ? "☆を付けた作品がなかったので、傾向を読み取れませんでした。"
-      : !liked.length || !top.length
+      : !liked.length
         ? "☆4以上を付けた作品がまだないので、好みの傾向を読み取れませんでした。"
-        : `高く評価した作品には「${top.slice(0, 3).join("」「")}」の要素が強く出ています。同じ味わいを持つ作品を、種類をまたいで選びました。`,
+        : !top.length
+          ? "高く評価した作品と低く評価した作品の要素が打ち消し合っていて、好みの傾向を読み取れませんでした。高く評価した作品に近いものを選びました。"
+          : `高く評価した作品には「${top.slice(0, 3).join("」「")}」の要素が強く出ています。同じ味わいを持つ作品を、種類をまたいで選びました。`,
     tags: liked.length ? top.slice(0, 5) : [],
     recommendations,
   };

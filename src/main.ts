@@ -42,34 +42,26 @@ function store(key: string, value: string) {
   }
 }
 
-/** 保存していた「診断する種類」。読めないか空なら全種類 */
-function loadMedia(): Set<Media> {
+/** 保存していた文字列の一覧を読む。壊れていれば空。知らない値は捨てる */
+function loadList<T extends string>(key: string, isValid: (x: unknown) => x is T): T[] {
   try {
-    const list = JSON.parse(load(MEDIA_KEY) ?? "[]");
-    const valid = Array.isArray(list) ? list.filter((m): m is Media => MEDIA.includes(m)) : [];
-    return new Set(valid.length ? valid : MEDIA);
+    const list = JSON.parse(load(key) ?? "[]");
+    return Array.isArray(list) ? list.filter(isValid) : [];
   } catch {
-    return new Set(MEDIA);
-  }
-}
-
-/** 保存していたジャンル。読めなければ指定なし(すべて) */
-function loadMoods(): Set<string> {
-  try {
-    const list = JSON.parse(load(MOODS_KEY) ?? "[]");
-    return new Set(Array.isArray(list) ? list.filter((m) => MOODS.some((x) => x.name === m)) : []);
-  } catch {
-    return new Set();
+    return [];
   }
 }
 
 const seen: Seen = parse(load(SEEN_KEY));
-const media = loadMedia();
-const moods = loadMoods();
-/** 結果画面で種類やジャンルを変えたら、設問に戻るときに出し直す */
-let quizStale = false;
+const savedMedia = loadList(MEDIA_KEY, (x): x is Media => MEDIA.includes(x as Media));
+/** 診断する種類。保存がなければ全種類 */
+const media = new Set<Media>(savedMedia.length ? savedMedia : MEDIA);
+/** ジャンル。保存がなければ指定なし(すべて) */
+const moods = new Set(loadList(MOODS_KEY, (x): x is string => MOODS.some((m) => m.name === x)));
 /** 条件に合う作品がないときは null。そのあいだ設問のボタンは押せない */
 let quiz: Quiz | null = null;
+/** 今回の設問を始めた時点で評価済みだった作品名。今回付けた評価を数えるのに使う */
+let ratedAtStart = new Set<string>();
 /** おすすめのカードで評価したときの一言。カードはすぐ消えるので、ここで保存を知らせる */
 let rateMessage = "";
 
@@ -141,7 +133,8 @@ function renderFilter() {
   })));
 }
 
-const MEDIA_NOTE = "1つ以上選んでください。複数選べます。";
+/** 種類の注意書きの元の文。警告を出したあと、ここに戻す */
+const MEDIA_NOTE = $("mediaNote").textContent ?? "";
 
 function onMediaChange(m: Media, input: HTMLInputElement) {
   const note = $("mediaNote");
@@ -158,24 +151,21 @@ function onMediaChange(m: Media, input: HTMLInputElement) {
   afterFilterChange();
 }
 
-/** 結果画面ではおすすめだけを選び直し、設問の途中なら出し直す */
+/** 設問はいつも今の条件で作り直す。結果画面ならおすすめだけ描き直し、設問の途中なら出し直す */
 function afterFilterChange() {
-  if (!$("result").hidden) {
-    quizStale = true;
-    renderResult();
-  } else {
-    start();
-  }
+  rebuildQuiz();
+  if (!$("result").hidden) renderResult();
+  else showQuiz();
 }
 
 // ---- 設問 ----
-function start() {
+/** 今の種類とジャンルで設問を作る。条件に合う作品がなければ quiz は null */
+function rebuildQuiz() {
   rateMessage = "";
-  quizStale = false;
   const { works, filled } = quizCatalog(CATALOG.filter((w) => matches(w, filterOf())), seen);
+  ratedAtStart = new Set(works.filter((w) => ratingOf(seen, w) !== undefined).map((w) => w.title));
   if (works.length === 0) {
     quiz = null;
-    showEmptyQuiz();
     return;
   }
   quiz = createQuiz(works);
@@ -185,6 +175,10 @@ function start() {
   const note = $("quizNote");
   note.hidden = notes.length === 0;
   note.textContent = notes.join("");
+}
+
+function start() {
+  rebuildQuiz();
   showQuiz();
 }
 
@@ -203,6 +197,10 @@ function showEmptyQuiz() {
 }
 
 function showQuiz() {
+  if (!quiz) {
+    showEmptyQuiz();
+    return;
+  }
   $("result").hidden = true;
   $("quiz").hidden = false;
   renderQuestion();
@@ -262,7 +260,7 @@ function renderResult() {
   const ratings = seenList(CATALOG, seen);
   const likedCount = ratings.filter((r) => r.rating >= LIKED_RATING).length;
   const gemsOnly = $<HTMLInputElement>("gemsOnly").checked;
-  const d = diagnose({ ratings, catalog: CATALOG.filter((w) => matches(w, filterOf(gemsOnly))), count: 6 });
+  const d = diagnose({ ratings, catalog: CATALOG.filter((w) => matches(w, filterOf(gemsOnly))) });
 
   $("typeName").textContent = d.typeName;
   $("typeSummary").textContent = d.summary;
@@ -306,7 +304,8 @@ function renderResult() {
   );
 
   $("rateNote").textContent = rateMessage;
-  const thisTime = (quiz ? shownWorks(quiz) : []).filter((w) => ratingOf(seen, w) !== undefined).length;
+  const thisTime = (quiz ? shownWorks(quiz) : [])
+    .filter((w) => ratingOf(seen, w) !== undefined && !ratedAtStart.has(w.title)).length;
   $("picks").textContent = ratings.length
     ? `☆を付けた${ratings.length}作から診断しました。今回の設問で評価したのは${thisTime}作です。`
     : "☆を付けた作品はまだありません。";
@@ -340,10 +339,7 @@ function renderSeen() {
 $("nextBtn").onclick = onNext;
 $("backBtn").onclick = () => { if (quiz) { back(quiz); renderQuestion(); } };
 $("swapBtn").onclick = () => { if (quiz && swap(quiz)) renderQuestion(); };
-$("fixBtn").onclick = () => {
-  if (!quiz || quizStale) start();
-  else { back(quiz); showQuiz(); }
-};
+$("fixBtn").onclick = () => { if (quiz) back(quiz); showQuiz(); };
 $("gemsOnly").onchange = renderResult;
 $("retryBtn").onclick = start;
 
