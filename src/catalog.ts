@@ -8,11 +8,23 @@ export interface Work {
   media: Media;
   /** 好みタグ。診断はこのタグの重なりで計算する */
   tags: string[];
-  /** 選択肢とPOPカードに出すひとこと */
+  /** 選択肢とPOPカードに出すひとこと。取り込んだ作品は独自に書くまで空 */
   pitch: string;
   /** 隠れた名作。評価は高いが、広くは知られていない作品 */
   gem?: true;
+  /**
+   * 評価を保存するときのキー。手書きの作品は作品名で保存してきたので付けない。
+   * 外部データベースから取り込んだ作品は「madb:C12345」のような ID を付け、同名の作品と混ざらないようにする
+   */
+  id?: string;
+  /** 発表年(取り込んだ作品だけ) */
+  year?: number;
+  /** 出典(取り込んだ作品だけ)。作品ページへのリンクに使う */
+  source?: { name: string; url: string };
 }
+
+/** 評価の保存に使うキー。id があればそれ、なければ作品名 */
+export const keyOf = (work: Work): string => work.id ?? work.title;
 
 /** 設問と診断に使う作品カタログ。作品を増やすときはここに1行足す。 */
 export const CATALOG: Work[] = [

@@ -104,6 +104,8 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .pop:nth-child(3n) { transform: rotate(-.3deg); }
 .pop:hover { transform: rotate(0); }
 .pop-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.pop .year { margin-left: auto; font-size: .8rem; color: var(--pop-soft); font-weight: 700; }
+.pop .chips .tag { border-color: var(--pop-ink); color: var(--pop-ink); }
 .media { background: var(--marker); color: var(--marker-ink); font-weight: 700; font-size: .8rem; padding: 1px 10px; border-radius: 2px; }
 /* 隠れた名作の印。POPカードの右上に手書き風で出す */
 .surprise { font-family: var(--font-pop); font-size: .9rem; border: 2px solid var(--pop-ink); border-radius: 999px; padding: 0 10px; transform: rotate(3deg); }
@@ -118,6 +120,10 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .pop-foot span { overflow-wrap: anywhere; min-width: 0; }
 .pop-foot a { color: var(--pop-ink); font-weight: 700; }
 
+.db { display: flex; flex-direction: column; gap: 14px; border-top: 1px solid var(--line); padding-top: 20px; }
+.db-title { font-size: 1.15rem; font-weight: 700; }
+.credit { border-top: 1px solid var(--line); padding-top: 16px; }
+.credit a { color: var(--accent); }
 .after { display: flex; flex-direction: column; gap: 14px; border-top: 1px solid var(--line); padding-top: 20px; }
 .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .rowlabel { font-weight: 700; font-size: .9rem; }

@@ -1,6 +1,7 @@
 import "./style.css";
-import { CATALOG, MEDIA, type Media, type Work } from "./catalog";
-import { LIKED_RATING, diagnose } from "./diagnose";
+import { CATALOG, MEDIA, keyOf, type Media, type Work } from "./catalog";
+import { LIKED_RATING, diagnose, type Recommendation } from "./diagnose";
+import { loadImported } from "./imported";
 import { MOODS, matches, type Filter } from "./filter";
 import {
   TOTAL_QUESTIONS, back, canSwap, createQuiz, currentRound, isDone, isLastQuestion, next, shownWorks, swap,
@@ -64,6 +65,16 @@ let quiz: Quiz | null = null;
 let ratedAtStart = new Set<string>();
 /** おすすめのカードで評価したときの一言。カードはすぐ消えるので、ここで保存を知らせる */
 let rateMessage = "";
+/**
+ * メディア芸術データベースから取り込んだ作品。読み終わるまでは空。
+ * 設問には使わず(ひとことがなく、知っているか判断しにくい)、おすすめの第2段と見た作品の一覧に使う
+ */
+let imported: Work[] = [];
+/** 取り込んだ作品を読めなかったとき */
+let importedError = false;
+
+/** 手書きの作品と取り込んだ作品を合わせた全作品。評価の一覧と診断の元に使う */
+const allWorks = (): Work[] => imported.length ? CATALOG.concat(imported) : CATALOG;
 
 const filterOf = (gemsOnly = false): Filter => ({ media, moods, gemsOnly });
 
@@ -97,13 +108,13 @@ function stars(work: Work, scope: string, opts: { clearable: boolean }) {
     const on = current !== undefined && n <= current;
     const b = el("button", "star" + (on ? " on" : ""), on ? "★" : "☆");
     b.type = "button";
-    b.dataset.key = `${scope}:${work.title}:${n}`;
+    b.dataset.key = `${scope}:${keyOf(work)}:${n}`;
     b.setAttribute("aria-label", `星${n}`);
     b.setAttribute("aria-pressed", String(current === n));
     b.onclick = () => {
-      if (opts.clearable && current === n) unrate(seen, work.title);
-      else rate(seen, work.title, n as Rating);
-      if (scope === "pop") {
+      if (opts.clearable && current === n) unrate(seen, keyOf(work));
+      else rate(seen, keyOf(work), n as Rating);
+      if (scope === "pop" || scope === "db") {
         rateMessage = `『${work.title}』を星${n}で見た作品に入れました。診断にもすぐ反映しています。付け直しや取り消しは下の「見た作品」からできます。`;
       }
       onSeenChange();
@@ -163,7 +174,7 @@ function afterFilterChange() {
 function rebuildQuiz() {
   rateMessage = "";
   const { works, filled } = quizCatalog(CATALOG.filter((w) => matches(w, filterOf())), seen);
-  ratedAtStart = new Set(works.filter((w) => ratingOf(seen, w) !== undefined).map((w) => w.title));
+  ratedAtStart = new Set(works.filter((w) => ratingOf(seen, w) !== undefined).map((w) => keyOf(w)));
   if (works.length === 0) {
     quiz = null;
     return;
@@ -256,8 +267,36 @@ function onNext() {
 }
 
 // ---- 診断結果 ----
+/** おすすめ1作のPOPカード。取り込んだ作品はひとことの代わりに発表年とタグを出し、出典の作品ページへつなぐ */
+function popCard({ work, from, fromRating, shared }: Recommendation, scope: string) {
+  const card = el("article", "pop");
+  const top = el("div", "pop-top");
+  top.append(el("span", "media", work.media));
+  if (work.gem) top.append(el("span", "surprise", "隠れた名作"));
+  if (work.year) top.append(el("span", "year", `${work.year}年`));
+  const rateRow = el("div", "pop-rate");
+  rateRow.append(el("span", undefined, "もう見た?"), stars(work, scope, { clearable: false }));
+  const foot = el("div", "pop-foot");
+  const link = el("a", undefined, work.source ? `${work.source.name}で見る` : "作品を調べる");
+  link.href = work.source?.url ?? "https://www.google.com/search?q=" + encodeURIComponent(`${work.title} ${work.media}`);
+  link.target = "_blank";
+  link.rel = "noopener";
+  foot.append(el("span", undefined, `『${from.title}』に☆${fromRating}を付けたあなたへ`), link);
+  const lead = work.pitch ? el("p", "pitch", work.pitch) : el("div", "chips");
+  if (!work.pitch) lead.append(...work.tags.map((t) => el("span", "tag", t)));
+  card.append(
+    top,
+    lead,
+    el("h3", undefined, `『${work.title}』`),
+    el("p", "reason", `『${from.title}』と同じく「${shared.join("」「")}」を味わえる作品です。`),
+    rateRow,
+    foot,
+  );
+  return card;
+}
+
 function renderResult() {
-  const ratings = seenList(CATALOG, seen);
+  const ratings = seenList(allWorks(), seen);
   const likedCount = ratings.filter((r) => r.rating >= LIKED_RATING).length;
   const gemsOnly = $<HTMLInputElement>("gemsOnly").checked;
   const d = diagnose({ ratings, catalog: CATALOG.filter((w) => matches(w, filterOf(gemsOnly))) });
@@ -277,43 +316,43 @@ function renderResult() {
         ? "選んだ種類やジャンルの隠れた名作で、まだ評価していないものの中に好みに合う作品が見つかりませんでした。「隠れた名作だけ」を外すか、種類やジャンルを増やしてみてください。"
         : "選んだ種類やジャンルで、まだ評価していない作品の中に好みに合うものが見つかりませんでした。種類やジャンルを増やしてみてください。";
 
-  $("shelf").replaceChildren(
-    ...d.recommendations.map(({ work, from, fromRating, shared }) => {
-      const card = el("article", "pop");
-      const top = el("div", "pop-top");
-      top.append(el("span", "media", work.media));
-      if (work.gem) top.append(el("span", "surprise", "隠れた名作"));
-      const rateRow = el("div", "pop-rate");
-      rateRow.append(el("span", undefined, "もう見た?"), stars(work, "pop", { clearable: false }));
-      const foot = el("div", "pop-foot");
-      const link = el("a", undefined, "作品を調べる");
-      link.href = "https://www.google.com/search?q=" + encodeURIComponent(`${work.title} ${work.media}`);
-      link.target = "_blank";
-      link.rel = "noopener";
-      foot.append(el("span", undefined, `『${from.title}』に☆${fromRating}を付けたあなたへ`), link);
-      card.append(
-        top,
-        el("p", "pitch", work.pitch),
-        el("h3", undefined, `『${work.title}』`),
-        el("p", "reason", `『${from.title}』と同じく「${shared.join("」「")}」を味わえる作品です。`),
-        rateRow,
-        foot,
-      );
-      return card;
-    }),
-  );
+  $("shelf").replaceChildren(...d.recommendations.map((r) => popCard(r, "pop")));
+  renderImportedShelf(ratings, likedCount > 0);
 
   $("rateNote").textContent = rateMessage;
   const thisTime = (quiz ? shownWorks(quiz) : [])
-    .filter((w) => ratingOf(seen, w) !== undefined && !ratedAtStart.has(w.title)).length;
+    .filter((w) => ratingOf(seen, w) !== undefined && !ratedAtStart.has(keyOf(w))).length;
   $("picks").textContent = ratings.length
     ? `☆を付けた${ratings.length}作から診断しました。今回の設問で評価したのは${thisTime}作です。`
     : "☆を付けた作品はまだありません。";
 }
 
+/**
+ * メディア芸術データベースから取り込んだ作品のおすすめ(第2段)。
+ * 手書きの作品とは分けて出す。ひとことがなく、隠れた名作の印もないので、「隠れた名作だけ」のときは出さない
+ */
+function renderImportedShelf(ratings: ReturnType<typeof seenList>, hasLiked: boolean) {
+  const section = $("dbSection");
+  const note = $("dbNote");
+  const gemsOnly = $<HTMLInputElement>("gemsOnly").checked;
+  const recs = imported.length && hasLiked && !gemsOnly
+    ? diagnose({ ratings, catalog: imported.filter((w) => matches(w, filterOf())) }).recommendations
+    : [];
+  section.hidden = !hasLiked || gemsOnly;
+  $("dbShelf").replaceChildren(...recs.map((r) => popCard(r, "db")));
+  note.hidden = recs.length > 0;
+  note.textContent = importedError
+    ? "データベースの作品を読み込めませんでした。"
+    : !imported.length
+      ? "データベースの作品を読み込んでいます…"
+      : !["漫画", "アニメ", "ゲーム"].some((m) => media.has(m as Media))
+        ? "取り込んだ作品は漫画・アニメ・ゲームだけです。診断する種類にどれかを入れると、ここにも出ます。"
+        : "選んだ種類やジャンルで、好みに合う作品が見つかりませんでした。";
+}
+
 // ---- 見た作品の一覧 ----
 function renderSeen() {
-  const list = seenList(CATALOG, seen);
+  const list = seenList(allWorks(), seen);
   $("seenCount").textContent = `${list.length}作`;
   $("seenEmpty").hidden = list.length > 0;
   const warn = $("seenWarn");
@@ -327,9 +366,9 @@ function renderSeen() {
       name.append(el("span", "kind", work.media), el("span", undefined, work.title));
       const undo = el("button", "btn btn-quiet btn-small", "取り消す");
       undo.type = "button";
-      undo.dataset.key = `undo:${work.title}`;
+      undo.dataset.key = `undo:${keyOf(work)}`;
       undo.setAttribute("aria-label", `『${work.title}』を見た作品から外す`);
-      undo.onclick = () => { unrate(seen, work.title); onSeenChange(); };
+      undo.onclick = () => { unrate(seen, keyOf(work)); onSeenChange(); };
       li.append(name, stars(work, "list", { clearable: false }), undo);
       return li;
     }),
@@ -346,3 +385,15 @@ $("retryBtn").onclick = start;
 renderFilter();
 renderSeen();
 start();
+
+// 取り込んだ作品は量が多いので、画面を出してから読む。読めなくても手書きの作品だけで動く
+loadImported(CATALOG).then((works) => {
+  imported = works;
+}).catch(() => {
+  importedError = true;
+}).finally(() => {
+  keepFocus(() => {
+    if (!$("result").hidden) renderResult();
+    renderSeen();
+  });
+});
