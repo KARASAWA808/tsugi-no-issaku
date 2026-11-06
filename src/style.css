@@ -146,6 +146,8 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .db-title { font-size: 1.15rem; font-weight: 700; }
 .credit { border-top: 1px solid var(--line); padding-top: 16px; }
 .credit a { color: var(--accent); }
+.credit p + p { margin-top: 8px; }
+.tmdb-logo { height: 10px; width: auto; vertical-align: -1px; }
 .after { display: flex; flex-direction: column; gap: 14px; border-top: 1px solid var(--line); padding-top: 20px; }
 .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .rowlabel { font-weight: 700; font-size: .9rem; }
