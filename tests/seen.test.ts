@@ -4,7 +4,8 @@ import { diagnose } from "../src/diagnose";
 import {
   TOTAL_QUESTIONS, WORKS_PER_QUIZ, createQuiz, currentRound, next, passedWorks, pickedWorks, toggle,
 } from "../src/quiz";
-import { parse, quizCatalog, rate, ratingOf, seenList, serialize, unrate, unseenOf, type Seen } from "../src/seen";
+import { tagScores } from "../src/diagnose";
+import { FAVORITE_RATING, favoritesOf, parse, quizCatalog, rate, ratingOf, seenList, serialize, unrate, unseenOf, type Seen } from "../src/seen";
 
 function seeded(seed: number) {
   return () => ((seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296);
@@ -123,5 +124,63 @@ describe("見た作品を外す", () => {
     }
     const d = diagnose({ picked: pickedWorks(quiz), passed: passedWorks(quiz), catalog: unseenOf(CATALOG, s) });
     expect(d.recommendations.some((r) => s.has(r.work.title))).toBe(false);
+  });
+});
+
+describe("☆5を好みの診断に使う", () => {
+  const brainy = CATALOG.filter((w) => w.tags.includes("頭脳戦"));
+
+  it("☆5の作品だけを拾う", () => {
+    const s: Seen = new Map();
+    rate(s, CATALOG[0].title, FAVORITE_RATING);
+    rate(s, CATALOG[1].title, 4);
+    rate(s, CATALOG[2].title, 1);
+    expect(favoritesOf(CATALOG, s)).toEqual([CATALOG[0]]);
+  });
+
+  it("「好き」がひとつもなくても、☆5の作品から診断できる", () => {
+    const favorites = brainy.slice(0, 5);
+    const d = diagnose({ picked: [], passed: [], favorites, catalog: CATALOG });
+    expect(d.tags[0]).toBe("頭脳戦");
+    expect(d.recommendations).toHaveLength(6);
+    expect(d.summary).toContain("☆5");
+    for (const r of d.recommendations) expect(favorites).toContain(r.from);
+  });
+
+  it("☆5の作品は、全カタログを渡してもおすすめに出ない", () => {
+    const favorites = brainy.slice(0, 5);
+    const d = diagnose({ picked: brainy.slice(5, 8), passed: [], favorites, catalog: CATALOG, count: CATALOG.length });
+    expect(d.recommendations.some((r) => favorites.includes(r.work))).toBe(false);
+  });
+
+  it("「好き」と☆5の両方に当たる作品は1回だけ数える", () => {
+    const picked = brainy.slice(0, 3);
+    const both = diagnose({ picked, passed: [], favorites: [picked[0]], catalog: CATALOG });
+    const pickedOnly = diagnose({ picked, passed: [], catalog: CATALOG });
+    expect(both.tags).toEqual(pickedOnly.tags);
+    expect(both.recommendations).toEqual(pickedOnly.recommendations);
+    // 「好き」で選んだ作品だけなので、説明は☆5に触れない
+    expect(both.summary).toBe(pickedOnly.summary);
+  });
+
+  it("設問にまざった☆5の作品は、選ばなくても減点しない", () => {
+    const fav = brainy[0];
+    const picked = brainy.slice(1, 3);
+    const withPassed = diagnose({ picked, passed: [fav], favorites: [fav], catalog: CATALOG });
+    const without = diagnose({ picked, passed: [], favorites: [fav], catalog: CATALOG });
+    expect(withPassed.tags).toEqual(without.tags);
+    expect(withPassed.recommendations).toEqual(without.recommendations);
+    // 減点していれば、☆5のタグの点が下がるはず
+    const liked = [...picked, fav];
+    expect(tagScores(liked, []).get("頭脳戦")).toBeGreaterThan(tagScores(liked, [fav]).get("頭脳戦")!);
+  });
+
+  it("☆5を足すと好みが寄る", () => {
+    const picked = CATALOG.filter((w) => w.tags.includes("日常")).slice(0, 2);
+    const before = diagnose({ picked, passed: [], catalog: CATALOG });
+    const after = diagnose({ picked, passed: [], favorites: brainy.slice(0, 6), catalog: CATALOG });
+    expect(before.tags[0]).not.toBe("頭脳戦");
+    expect(after.tags[0]).toBe("頭脳戦");
+    expect(after.summary).toContain("「好き」と選んだ作品と☆5の作品");
   });
 });

@@ -6,7 +6,7 @@ import {
   next, passedWorks, pickedWorks, swap, toggle, type Quiz,
 } from "./quiz";
 import {
-  RATINGS, parse, quizCatalog, rate, ratingOf, seenList, serialize, unrate, unseenOf, type Rating, type Seen,
+  RATINGS, favoritesOf, parse, quizCatalog, rate, ratingOf, seenList, serialize, unrate, unseenOf, type Rating, type Seen,
 } from "./seen";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -80,7 +80,7 @@ function stars(work: Work, scope: string, opts: { clearable: boolean }) {
     b.onclick = () => {
       if (opts.clearable && current === n) unrate(seen, work.title);
       else rate(seen, work.title, n as Rating);
-      if (scope === "pop") rateMessage = `『${work.title}』を星${n}で見た作品に入れました。付け直しや取り消しは下の「見た作品」からできます。`;
+      if (scope === "pop") rateMessage = `『${work.title}』を星${n}で見た作品に入れました。${n === 5 ? "☆5なので、好みの診断にも使います。" : ""}付け直しや取り消しは下の「見た作品」からできます。`;
       onSeenChange();
     };
     row.append(b);
@@ -168,7 +168,10 @@ function onNext() {
 // ---- 診断結果 ----
 function renderResult() {
   const picked = pickedWorks(quiz);
-  const d = diagnose({ picked, passed: passedWorks(quiz), catalog: unseenOf(CATALOG, seen), media: mediaFilter });
+  const favorites = favoritesOf(CATALOG, seen);
+  const d = diagnose({
+    picked, passed: passedWorks(quiz), favorites, catalog: unseenOf(CATALOG, seen), media: mediaFilter,
+  });
 
   $("typeName").textContent = d.typeName;
   $("typeSummary").textContent = d.summary;
@@ -177,7 +180,7 @@ function renderResult() {
   const status = $("status");
   status.hidden = d.recommendations.length > 0;
   status.className = "status err";
-  status.textContent = picked.length === 0
+  status.textContent = picked.length === 0 && favorites.length === 0
     ? "「好き」と選んだ作品がないので、おすすめを出せませんでした。「選び直す」から、気になる作品をひとつでも選んでみてください。"
     : mediaFilter.size
       ? "この種類で、まだ見ていない作品は見つかりませんでした。しぼりこみを外してください。"
@@ -195,7 +198,8 @@ function renderResult() {
       link.href = "https://www.google.com/search?q=" + encodeURIComponent(`${work.title} ${work.media}`);
       link.target = "_blank";
       link.rel = "noopener";
-      foot.append(el("span", undefined, `『${from.title}』が好きなあなたへ`), link);
+      const why = picked.includes(from) ? "が好きな" : "に☆5を付けた";
+      foot.append(el("span", undefined, `『${from.title}』${why}あなたへ`), link);
       card.append(
         top,
         el("p", "pitch", work.pitch),
@@ -210,9 +214,11 @@ function renderResult() {
 
   $("rateNote").textContent = rateMessage;
 
-  $("picks").textContent = picked.length
+  const extra = favorites.filter((w) => !picked.includes(w));
+  $("picks").textContent = (picked.length
     ? `あなたが「好き」と選んだ${picked.length}作: ` + picked.map((w) => `『${w.title}』`).join(" ")
-    : "「好き」と選んだ作品はありませんでした。";
+    : "「好き」と選んだ作品はありませんでした。")
+    + (extra.length ? `☆5を付けた${extra.length}作${picked.length ? "も" : "を"}、好みの手がかりにしています。` : "");
 }
 
 // ---- 見た作品の一覧 ----

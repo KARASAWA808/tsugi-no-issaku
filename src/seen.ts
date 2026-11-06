@@ -24,6 +24,13 @@ export function unrate(seen: Seen, title: string): void {
 
 export const ratingOf = (seen: Seen, work: Work): Rating | undefined => seen.get(work.title);
 
+/** この評価の作品は、設問の「好き」と同じく好みの手がかりにする */
+export const FAVORITE_RATING: Rating = 5;
+
+/** ☆5を付けた作品。見た作品なので、見ていない作品にしぼる前のカタログから探す */
+export const favoritesOf = (catalog: Work[], seen: Seen): Work[] =>
+  catalog.filter((w) => seen.get(w.title) === FAVORITE_RATING);
+
 export const unseenOf = (catalog: Work[], seen: Seen): Work[] => catalog.filter((w) => !seen.has(w.title));
 
 /** 見た作品を評価の高い順に。同じ評価ならカタログ順。カタログにない作品名は出さない */
