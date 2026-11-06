@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="3作ずつ出る設問で好きな作品をいくつでも選び、10問答えると次にハマりそうな作品を診断します。" />
+    <meta name="description" content="6作ずつ出る設問で見た作品に☆を付けていき、5問答えると次にハマりそうな作品を診断します。" />
     <title>つぎの一作</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -13,13 +13,19 @@
     <div class="wrap">
       <header>
         <h1><span>つぎの一作</span></h1>
-        <p class="lead">3作ずつ出てくるので、好きなものを好きなだけ選んでください。ひとつも選ばなくてもかまいません。10問答えると、次にハマりそうな作品を6つ選びます。</p>
+        <p class="lead">6作ずつ出てくるので、見たことのある作品に☆1〜5を付けてください。見ていない作品はそのままでかまいません。5問答えると、☆の評価から次にハマりそうな作品を6つ選びます。</p>
       </header>
+
+      <fieldset class="filter" id="filter">
+        <legend>診断する種類</legend>
+        <div class="checks" id="mediaChecks"></div>
+        <p class="note" id="filterNote">種類を変えると、設問を最初から出し直します。付けた☆はそのまま残ります。</p>
+      </fieldset>
 
       <section class="quiz" id="quiz" aria-label="設問">
         <div class="qhead">
           <p class="qnum" id="qnum" aria-live="polite"></p>
-          <p class="qtext">好きなのはどれ?<small>(いくつでも・なしでも)</small></p>
+          <p class="qtext">見た作品に☆を付けてください<small>(見ていなければそのまま)</small></p>
         </div>
         <div class="steps" id="steps" aria-hidden="true"></div>
         <p class="note" id="quizNote" hidden></p>
@@ -27,7 +33,7 @@
         <div class="qfoot">
           <button type="button" class="btn btn-main" id="nextBtn">次へ</button>
           <button type="button" class="btn btn-quiet" id="backBtn">ひとつ戻る</button>
-          <button type="button" class="btn btn-quiet" id="swapBtn">3つとも知らない</button>
+          <button type="button" class="btn btn-quiet" id="swapBtn">6つとも知らない</button>
           <p class="hint" id="swapHint"></p>
         </div>
       </section>
@@ -43,12 +49,8 @@
         <div class="shelf" id="shelf"></div>
         <p class="note" id="rateNote" role="status"></p>
         <div class="after">
-          <div class="row" role="group" aria-labelledby="mediaLabel">
-            <span class="rowlabel" id="mediaLabel">種類をしぼる</span>
-            <span class="row" id="mediaList"></span>
-          </div>
           <div class="row">
-            <button type="button" class="btn btn-quiet" id="fixBtn">選び直す</button>
+            <button type="button" class="btn btn-quiet" id="fixBtn">設問に戻る</button>
             <button type="button" class="btn btn-main" id="retryBtn">最初からやり直す</button>
           </div>
           <p class="picks" id="picks"></p>
@@ -58,7 +60,7 @@
       <details class="seen" id="seen">
         <summary>見た作品 <span class="count" id="seenCount"></span></summary>
         <div class="seen-body">
-          <p class="note">☆で評価した作品は、次の診断の設問とおすすめに出なくなります。☆5の作品は「好き」と同じく好みの診断に使います。評価はこのブラウザにだけ保存されます。</p>
+          <p class="note">診断はここにある☆の評価だけを使います。☆4〜5は好みに近づけ、☆1〜2は好みから遠ざけます。評価した作品は、次の設問とおすすめには出ません。評価はこのブラウザにだけ保存されます。</p>
           <p class="note" id="seenWarn" hidden></p>
           <p class="note" id="seenEmpty">まだありません。設問やおすすめの☆で評価すると、ここに並びます。</p>
           <ul class="seen-list" id="seenList"></ul>

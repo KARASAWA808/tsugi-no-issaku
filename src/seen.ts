@@ -24,13 +24,6 @@ export function unrate(seen: Seen, title: string): void {
 
 export const ratingOf = (seen: Seen, work: Work): Rating | undefined => seen.get(work.title);
 
-/** この評価の作品は、設問の「好き」と同じく好みの手がかりにする */
-export const FAVORITE_RATING: Rating = 5;
-
-/** ☆5を付けた作品。見た作品なので、見ていない作品にしぼる前のカタログから探す */
-export const favoritesOf = (catalog: Work[], seen: Seen): Work[] =>
-  catalog.filter((w) => seen.get(w.title) === FAVORITE_RATING);
-
 export const unseenOf = (catalog: Work[], seen: Seen): Work[] => catalog.filter((w) => !seen.has(w.title));
 
 /** 見た作品を評価の高い順に。同じ評価ならカタログ順。カタログにない作品名は出さない */
@@ -50,11 +43,13 @@ export interface QuizCatalog {
 }
 
 /**
- * 設問に使う作品。見た作品は除くが、1回の診断に足りないときだけ見た作品をまぜて埋める。
+ * 設問に使う作品。catalog は種類でしぼった後のもの。
+ * 見た作品は除くが、1回の診断に足りないときだけ見た作品をまぜて埋める(付け直せる)。
+ * しぼった種類の作品が30作に満たなければ、ある分だけになる。
  */
 export function quizCatalog(catalog: Work[], seen: Seen, random: () => number = Math.random): QuizCatalog {
   const unseen = unseenOf(catalog, seen);
-  const lack = WORKS_PER_QUIZ - unseen.length;
+  const lack = Math.min(WORKS_PER_QUIZ, catalog.length) - unseen.length;
   if (lack <= 0) return { works: unseen, filled: 0 };
   const fill = shuffle(catalog.filter((w) => seen.has(w.title)), random).slice(0, lack);
   return { works: unseen.concat(fill), filled: fill.length };
