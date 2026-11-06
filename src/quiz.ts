@@ -2,6 +2,8 @@ import type { Work } from "./catalog";
 
 export const TOTAL_QUESTIONS = 10;
 export const OPTIONS_PER_QUESTION = 3;
+/** 1回の診断で出す作品数。カタログ(または見ていない作品)はこれ以上必要 */
+export const WORKS_PER_QUIZ = TOTAL_QUESTIONS * OPTIONS_PER_QUESTION;
 
 export interface Round {
   options: Work[];
@@ -33,8 +35,8 @@ function draw(quiz: Quiz): Work[] {
 }
 
 export function createQuiz(catalog: Work[], random: () => number = Math.random): Quiz {
-  if (catalog.length < TOTAL_QUESTIONS * OPTIONS_PER_QUESTION) {
-    throw new Error(`カタログには最低 ${TOTAL_QUESTIONS * OPTIONS_PER_QUESTION} 作が必要です`);
+  if (catalog.length < WORKS_PER_QUIZ) {
+    throw new Error(`カタログには最低 ${WORKS_PER_QUIZ} 作が必要です`);
   }
   const quiz: Quiz = { rounds: [], index: 0, pool: shuffle(catalog, random), done: false };
   quiz.rounds.push({ options: draw(quiz), picks: [] });
