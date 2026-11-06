@@ -1,4 +1,4 @@
-/* Layout: one quiet column (a 3-choice question, ten times), ending in a shelf of tilted bookstore POP cards, the only loud element. */
+/* Layout: one quiet column (3 works a question, pick any number, ten times), ending in a shelf of tilted bookstore POP cards, the only loud element. */
 :root {
   --bg: #EEF1EE;
   --surface: #FFFFFF;
@@ -50,18 +50,26 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .qnum { font-family: var(--font-pop); font-size: 1.5rem; font-variant-numeric: tabular-nums; }
 .qnum small { font-size: 1rem; color: var(--muted); }
 .qtext { font-weight: 700; }
+.qtext small { font-weight: 500; color: var(--muted); font-size: .85rem; margin-left: .3em; }
 .steps { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; }
 .steps i { height: 6px; border-radius: 3px; background: var(--line); }
 .steps i.done { background: var(--ink); }
 .steps i.now { background: var(--accent); }
 .options { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 12px; }
 .opt {
-  text-align: left; background: var(--surface); color: var(--ink); border: 2px solid var(--line); border-radius: 6px;
+  position: relative; text-align: left; background: var(--surface); color: var(--ink); border: 2px solid var(--line); border-radius: 6px;
   padding: 16px; display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 148px;
-  transition: border-color .12s ease, transform .12s ease;
+  transition: border-color .12s ease, transform .12s ease, background-color .12s ease;
 }
 .opt:hover { border-color: var(--ink); transform: translateY(-2px); }
-.opt.picked { border-color: var(--accent); }
+/* 「好き」の印。押されている間だけ右上に出す */
+.opt::after {
+  content: "好き"; position: absolute; top: 12px; right: 12px;
+  background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 0 10px;
+  font-size: .78rem; font-weight: 700; line-height: 1.6; opacity: 0; transform: scale(.8); transition: opacity .12s ease, transform .12s ease;
+}
+.opt[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
+.opt[aria-pressed="true"]::after { opacity: 1; transform: scale(1); }
 .opt .kind { align-self: flex-start; border: 1px solid var(--ink); border-radius: 999px; padding: 0 10px; font-size: .78rem; font-weight: 700; }
 .opt .name { font-weight: 700; font-size: 1.1rem; line-height: 1.45; overflow-wrap: anywhere; }
 .opt .sub { color: var(--muted); font-size: .88rem; line-height: 1.6; }

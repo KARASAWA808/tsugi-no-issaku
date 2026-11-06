@@ -1,6 +1,6 @@
 # つぎの一作
 
-3択×10問で好みを診断し、おすすめ作品を出す静的サイト。Vite + TypeScript、フレームワークなし。
+3作×10問、各設問で好きな作品を好きなだけ(0〜3作)選んで好みを診断し、おすすめ作品を出す静的サイト。Vite + TypeScript、フレームワークなし。
 
 - コマンド: `npm run dev` / `npm test` / `npm run build`(型チェック込み)
 - ロジックは `src/quiz.ts`(進行)と `src/diagnose.ts`(採点)に分離し、DOMに触れない。画面は `src/main.ts` だけが描画する。

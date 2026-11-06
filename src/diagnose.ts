@@ -71,8 +71,10 @@ export function diagnose({ picked, passed, catalog, media, count = 6 }: Diagnose
   return {
     typeName: top.length > 1 ? `${top[0]}×${top[1]}派` : `${top[0] ?? "なんでも"}派`,
     summary: top.length
-      ? `選んだ作品には「${top.slice(0, 3).join("」「")}」の要素が強く出ています。同じ味わいを持つ作品を、種類をまたいで選びました。`
-      : "好みの傾向がまだ読み取れませんでした。",
+      ? `「好き」と選んだ作品には「${top.slice(0, 3).join("」「")}」の要素が強く出ています。同じ味わいを持つ作品を、種類をまたいで選びました。`
+      : picked.length
+        ? "好みの傾向がまだ読み取れませんでした。"
+        : "「好き」と選んだ作品がなかったので、傾向を読み取れませんでした。",
     tags: top.slice(0, 5),
     recommendations,
   };
