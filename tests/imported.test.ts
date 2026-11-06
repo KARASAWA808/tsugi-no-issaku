@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import summary from "../data/madb/summary.json";
 import tagged from "../data/madb/tagged.json";
+import tmdbAnime from "../data/tmdb/anime.json";
 import tmdbSummary from "../data/tmdb/summary.json";
 import tmdbTagged from "../data/tmdb/tagged.json";
 import { CATALOG, MEDIA, keyOf, type Work } from "../src/catalog";
 import { diagnose } from "../src/diagnose";
 import {
-  MADB_ID_URL, MADB_KEY_PREFIX, TMDB_KEY_PREFIX, isImportedEntry, mergeImported, titleKey, toWork,
+  MADB_ID_URL, MADB_KEY_PREFIX, TMDB_KEY_PREFIX, isImportedEntry, mergeImported, titleKey, toWork, type ImportedEntry,
 } from "../src/imported";
 import { interestList, isInterested, rateAndClear, toggle, type Interest } from "../src/interest";
 import { rate, ratingOf, seenList, unseenOf, type Seen } from "../src/seen";
@@ -70,6 +71,17 @@ describe("取り込んだ作品を Work にする", () => {
     expect(works[0].media).toBe("アニメ");
   });
 
+  it("TMDB とメディア芸術データベースで同じアニメがあれば、渡す順番に関わらず TMDB の方を使う", () => {
+    const madb = { ...entry, id: "C9", title: "同じアニメ", media: "アニメ" as const };
+    const tmdb = { ...entry, id: "tv:9", title: "同じアニメ", media: "アニメ" as const, source: "tmdb" as const };
+    for (const list of [[madb, tmdb], [tmdb, madb]]) {
+      const works = mergeImported([], list);
+      expect(works.map((w) => w.id)).toEqual([`${TMDB_KEY_PREFIX}tv:9`]);
+    }
+    // 種類が違えば両方残る
+    expect(mergeImported([], [{ ...madb, media: "漫画" }, tmdb]).length).toBe(2);
+  });
+
   it("手書きの作品の評価は作品名のまま保存され、取り込んだ作品は ID で保存される", () => {
     const seen: Seen = new Map();
     const hand = CATALOG[0];
@@ -98,17 +110,23 @@ describe("取り込んだ作品を Work にする", () => {
   });
 });
 
-describe("生成した data/tmdb/tagged.json", () => {
-  const entries = tmdbTagged as unknown[];
+describe("生成した data/tmdb/tagged.json と anime.json", () => {
+  const entries = [...(tmdbTagged as unknown[]), ...(tmdbAnime as unknown[])];
 
-  it("全件が TMDB の映画かドラマで、タグは18タグだけ、ID は重複しない", () => {
+  it("tagged.json は映画とドラマ、anime.json はアニメだけ", () => {
+    expect((tmdbTagged as ImportedEntry[]).every((e) => e.media === "映画" || e.media === "ドラマ")).toBe(true);
+    expect((tmdbAnime as ImportedEntry[]).length).toBeGreaterThan(1000);
+    expect((tmdbAnime as ImportedEntry[]).every((e) => e.media === "アニメ" && e.id.startsWith("tv:"))).toBe(true);
+  });
+
+  it("全件が TMDB の映画・ドラマ・アニメで、タグは18タグだけ、ID は重複しない", () => {
     expect(entries.length).toBeGreaterThan(1000);
     const ids = new Set<string>();
     for (const e of entries) {
       expect(isImportedEntry(e)).toBe(true);
       if (!isImportedEntry(e)) continue;
       expect(e.source).toBe("tmdb");
-      expect(["映画", "ドラマ"]).toContain(e.media);
+      expect(["映画", "ドラマ", "アニメ"]).toContain(e.media);
       expect(e.id).toMatch(/^(movie|tv):\d+$/);
       for (const t of e.tags) expect((TAGS as readonly string[]).includes(t), `${e.id}: ${t}`).toBe(true);
       expect(e.tags.length).toBeLessThanOrEqual(4);
@@ -119,13 +137,21 @@ describe("生成した data/tmdb/tagged.json", () => {
     expect(tmdbSummary.fetchedAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
-  it("MADB の作品と合わせても、手書きの作品や互いのキーとぶつからない", () => {
+  it("MADB の作品と合わせても、手書きの作品や互いのキーとぶつからず、同じ題名のアニメは1つになる", () => {
     const works = mergeImported(CATALOG, [...(tagged as unknown[]), ...entries]);
     const keys = new Set(CATALOG.map(keyOf));
+    const titles = new Set<string>();
     for (const w of works) {
       expect(keys.has(keyOf(w)), w.title).toBe(false);
       keys.add(keyOf(w));
+      const t = `${w.media}:${titleKey(w.title)}`;
+      expect(titles.has(t), w.title).toBe(false);
+      titles.add(t);
     }
+    const anime = works.filter((w) => w.media === "アニメ");
+    expect(anime.filter((w) => w.source?.name === "TMDB").length).toBeGreaterThan(1000);
+    expect(anime.filter((w) => w.source?.name === "メディア芸術データベース").length).toBeGreaterThan(100);
+    expect(tmdbSummary.overlapWithMadbAnime.count).toBeGreaterThan(0);
     expect(works.filter((w) => w.source?.name === "TMDB").length).toBeGreaterThan(1000);
     expect(works.filter((w) => w.source?.name === "メディア芸術データベース").length).toBeGreaterThan(1000);
   });

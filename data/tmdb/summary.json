@@ -4,13 +4,15 @@
   "refetchBy": "2027-05-07",
   "conditions": {
     "movie": "discover/movie: region=JP かつ 日本での公開種別が 2〜6(劇場・配信・パッケージ・TV)のいずれか(release_dates の JP)。vote_count >= 10",
-    "tv": "discover/tv: (a) watch_region=JP で配信情報(JustWatch 提供)がある(定額・無料・広告・レンタル・購入のいずれか)、vote_count >= 10。(b) 制作国が日本、vote_count >= 3。(a)と(b)の和集合"
+    "tv": "discover/tv: (a) watch_region=JP で配信情報(JustWatch 提供)がある(定額・無料・広告・レンタル・購入のいずれか)、vote_count >= 10。(b) 制作国が日本、vote_count >= 3。(a)と(b)の和集合。ジャンル Animation は除く",
+    "anime": "discover/tv: ジャンル Animation かつ (a) 制作国が日本 または (b) 原語が日本語。vote_count >= 3。日本の作品なので配信情報は問わない。日本以外のアニメーションは入れない"
   },
   "maxPages": 250,
   "excluded": {
-    "ドキュメンタリー・ニュース・リアリティ・トーク": 260,
-    "アニメのテレビシリーズ": 6044,
-    "日本語の題名なし": 943
+    "ドキュメンタリー・ニュース・リアリティ・トーク": 264,
+    "ドラマから除いたアニメのテレビシリーズ": 6044,
+    "日本以外のアニメーション": 0,
+    "日本語の題名なし": 970
   },
   "byMedia": {
     "映画": {
@@ -20,9 +22,23 @@
     },
     "ドラマ": {
       "total": 3140,
-      "tagged": 2760,
-      "untagged": 380
+      "tagged": 2761,
+      "untagged": 379
+    },
+    "アニメ": {
+      "total": 3946,
+      "tagged": 3646,
+      "untagged": 300
     }
   },
-  "tagged": 6948
+  "tagged": 10595,
+  "files": {
+    "tagged.json": "映画・ドラマ",
+    "anime.json": "アニメ"
+  },
+  "overlapWithMadbAnime": {
+    "count": 939,
+    "madbAnime": 1588,
+    "note": "同じ題名のアニメは、読み込み時に TMDB の方を使い、メディア芸術データベースの方は出さない(生成物は変えない)"
+  }
 }

@@ -14,18 +14,21 @@
  *           つまり「日本での公開日が TMDB に登録されている映画」。人気順で MAX_PAGES ページまで
  *   - ドラマ: discover/tv を (a) watch_region=JP で配信情報(JustWatch 提供)があるもの、
  *             (b) 制作国が日本のもの、の2つで引いて合わせる。人気順で MAX_PAGES ページまで
+ *   - アニメ: discover/tv をジャンル Animation で、(a) 制作国が日本、(b) 原語が日本語、の2つで引いて合わせ、
+ *           このサイトの種類「アニメ」にする。日本の作品なら配信情報がなくても入れる
  *   - どちらも票数の少ないものと成人向けは除く。ドキュメンタリー・ニュース・リアリティ・トーク番組は除く。
- *     アニメのテレビシリーズは除く(日本のものはメディア芸術データベース側(アニメ)にある。海外のものは
- *     このサイトの「ドラマ」に合わない)。アニメ映画は手書きのカタログと同じく「映画」として入れる
+ *     日本以外のアニメーション(海外のカートゥーンなど)は入れない(このサイトの「アニメ」は日本のアニメの意味で、
+ *     「ドラマ」にも合わない)。アニメ映画は手書きのカタログと同じく「映画」として入れ、「アニメ」には入れない
  *   - 日本語の題名がない作品(TMDB が原題をそのまま返すもの)は、日本では公開されていないか
  *     なじみがないと見て除く(原語が日本語か、題名に日本語が含まれるものは残す)
  *   - 作品ごとに keywords も取り、ジャンルと合わせて18タグに対応づける(対応表は src/tagmap.ts)
  *
  * 出力(どれも読める JSON):
- *   data/tmdb/tagged.json            タグ付けできた作品だけ(サイトが読む)
+ *   data/tmdb/tagged.json            タグ付けできた映画・ドラマ(サイトが読む)
+ *   data/tmdb/anime.json             タグ付けできたアニメ(サイトが読む)。チャンクが大きくなりすぎないよう分けている
  *   data/tmdb/summary.json           件数・判定に使った条件・取得日。規約上、取得から6か月以内に取り直す
  *   data/tmdb/unmapped-genres.json   対応表に当たらなかったジャンル語・キーワードの上位
- *   .cache/tmdb/works/movie.json, tv.json   取り込んだ全作品(未整備も含む)。リポジトリには入れない
+ *   .cache/tmdb/works/movie.json, tv.json, anime.json   取り込んだ全作品(未整備も含む)。リポジトリには入れない
  *
  * プロキシ経由の環境では NODE_USE_ENV_PROXY=1 を付けると HTTPS_PROXY を使う。
  */
@@ -45,7 +48,9 @@ const API = "https://api.themoviedb.org/3";
 const MAX_PAGES = Number(process.env.TMDB_MAX_PAGES ?? 250);
 const CONCURRENCY = 6;
 /** 最低限の票数。これより少ない作品は、人気順の深いページにある登録だけの作品なので取らない */
-const MIN_VOTES = { movie: 10, tv: 10, tvJapan: 3 };
+const MIN_VOTES = { movie: 10, tv: 10, tvJapan: 3, anime: 3 };
+/** メディア芸術データベースの生成物。アニメの重なりを数えるためだけに読む(変更はしない) */
+const MADB_TAGGED = path.join(ROOT, "data", "madb", "tagged.json");
 /** 手書きの作品と同じく、タグは最大4つ */
 const MAX_TAGS = 4;
 
@@ -111,7 +116,8 @@ async function discover(type, name, params) {
 const COMMON = { language: "ja-JP", include_adult: "false", sort_by: "popularity.desc" };
 const CONDITIONS = {
   movie: "discover/movie: region=JP かつ 日本での公開種別が 2〜6(劇場・配信・パッケージ・TV)のいずれか(release_dates の JP)。vote_count >= 10",
-  tv: "discover/tv: (a) watch_region=JP で配信情報(JustWatch 提供)がある(定額・無料・広告・レンタル・購入のいずれか)、vote_count >= 10。(b) 制作国が日本、vote_count >= 3。(a)と(b)の和集合",
+  tv: "discover/tv: (a) watch_region=JP で配信情報(JustWatch 提供)がある(定額・無料・広告・レンタル・購入のいずれか)、vote_count >= 10。(b) 制作国が日本、vote_count >= 3。(a)と(b)の和集合。ジャンル Animation は除く",
+  anime: "discover/tv: ジャンル Animation かつ (a) 制作国が日本 または (b) 原語が日本語。vote_count >= 3。日本の作品なので配信情報は問わない。日本以外のアニメーションは入れない",
 };
 
 /** サイトに出さないジャンル(TMDB の ID) */
@@ -125,7 +131,13 @@ const yearOf = (s) => {
   return m ? Number(m[1]) : null;
 };
 
-function convert(results, type, genreNames, excluded) {
+const isJapanese = (r) => (r.origin_country ?? []).includes("JP") || r.original_language === "ja";
+
+/**
+ * discover の結果を作品にする。media は 映画 / ドラマ / アニメ。
+ * ドラマからはアニメのテレビシリーズを除き、アニメには日本の作品だけを入れる
+ */
+function convert(results, type, media, genreNames, excluded) {
   const works = new Map();
   for (const r of results) {
     if (r.adult) continue;
@@ -134,9 +146,12 @@ function convert(results, type, genreNames, excluded) {
       excluded.genre++;
       continue;
     }
-    // アニメのテレビシリーズは入れない(日本のものはメディア芸術データベースのアニメにある)
-    if (type === "tv" && genreIds.includes(ANIMATION)) {
+    if (media === "ドラマ" && genreIds.includes(ANIMATION)) {
       excluded.animatedTv++;
+      continue;
+    }
+    if (media === "アニメ" && (!genreIds.includes(ANIMATION) || !isJapanese(r))) {
+      excluded.foreignAnimation++;
       continue;
     }
     const title = ((type === "movie" ? r.title : r.name) || "").trim();
@@ -153,7 +168,7 @@ function convert(results, type, genreNames, excluded) {
       id,
       tmdbId: r.id,
       title,
-      media: type === "movie" ? "映画" : "ドラマ",
+      media,
       year: yearOf(type === "movie" ? r.release_date : r.first_air_date),
       genres: genreIds.map((g) => genreNames.get(g)).filter(Boolean),
       keywords: [],
@@ -183,10 +198,11 @@ async function main() {
     for (const g of list.genres) genreNames.set(g.id, g.name);
   }
 
-  const excluded = { genre: 0, animatedTv: 0, noJapaneseTitle: 0 };
+  const excluded = { genre: 0, animatedTv: 0, foreignAnimation: 0, noJapaneseTitle: 0 };
   const movies = convert(
     await discover("movie", "movie_jp_release", { ...COMMON, region: "JP", with_release_type: "2|3|4|5|6", "vote_count.gte": MIN_VOTES.movie }),
     "movie",
+    "映画",
     genreNames,
     excluded,
   );
@@ -194,12 +210,19 @@ async function main() {
     ...COMMON, watch_region: "JP", with_watch_monetization_types: "flatrate|free|ads|rent|buy", "vote_count.gte": MIN_VOTES.tv,
   });
   const tvJapan = await discover("tv", "tv_jp_origin", { ...COMMON, with_origin_country: "JP", "vote_count.gte": MIN_VOTES.tvJapan });
-  const tv = convert([...tvStreaming, ...tvJapan], "tv", genreNames, excluded);
-  const all = dedupe([...movies, ...tv]);
-  console.error(`映画 ${movies.length} 件、ドラマ ${tv.length} 件(重複を除いて ${all.length} 件)。keywords を取ります`);
+  const tv = convert([...tvStreaming, ...tvJapan], "tv", "ドラマ", genreNames, excluded);
+  const animeJapan = await discover("tv", "anime_jp_origin", { ...COMMON, with_genres: ANIMATION, with_origin_country: "JP", "vote_count.gte": MIN_VOTES.anime });
+  const animeJaLang = await discover("tv", "anime_ja_lang", { ...COMMON, with_genres: ANIMATION, with_original_language: "ja", "vote_count.gte": MIN_VOTES.anime });
+  // 2つの引き方の和集合を人気順にし、上限は1つの引き方と同じ件数にそろえる
+  const anime = convert([...animeJapan, ...animeJaLang], "tv", "アニメ", genreNames, excluded)
+    .sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0))
+    .slice(0, MAX_PAGES * 20);
+  const all = dedupe([...movies, ...tv, ...anime]);
+  console.error(`映画 ${movies.length} 件、ドラマ ${tv.length} 件、アニメ ${anime.length} 件(重複を除いて ${all.length} 件)。keywords を取ります`);
 
   await mapLimit(all, async (w, i) => {
     const type = w.media === "映画" ? "movie" : "tv";
+    if (w.keywords.length) return;
     try {
       const kw = await get(`/${type}/${w.tmdbId}/keywords`, {}, `keywords/${type}/${w.tmdbId}.json`);
       w.keywords = (kw.keywords ?? kw.results ?? []).map((k) => k.name);
@@ -228,12 +251,13 @@ async function main() {
     maxPages: MAX_PAGES,
     excluded: {
       "ドキュメンタリー・ニュース・リアリティ・トーク": excluded.genre,
-      "アニメのテレビシリーズ": excluded.animatedTv,
+      "ドラマから除いたアニメのテレビシリーズ": excluded.animatedTv,
+      "日本以外のアニメーション": excluded.foreignAnimation,
       "日本語の題名なし": excluded.noJapaneseTitle,
     },
     byMedia: {},
   };
-  for (const [media, file] of [["映画", "movie.json"], ["ドラマ", "tv.json"]]) {
+  for (const [media, file] of [["映画", "movie.json"], ["ドラマ", "tv.json"], ["アニメ", "anime.json"]]) {
     const list = out.filter((w) => w.media === media);
     fs.writeFileSync(path.join(WORKS_OUT, file), lines(list));
     summary.byMedia[media] = {
@@ -244,8 +268,21 @@ async function main() {
   }
   const tagged = out.filter((w) => w.status === "tagged")
     .map((w) => ({ id: w.id, title: w.title, media: w.media, year: w.year, tags: w.tags, source: "tmdb" }));
-  fs.writeFileSync(path.join(OUT, "tagged.json"), lines(tagged));
+  // 結果画面で読むチャンクが大きくなりすぎないよう、アニメは別ファイルにする
+  fs.writeFileSync(path.join(OUT, "tagged.json"), lines(tagged.filter((w) => w.media !== "アニメ")));
+  fs.writeFileSync(path.join(OUT, "anime.json"), lines(tagged.filter((w) => w.media === "アニメ")));
   summary.tagged = tagged.length;
+  summary.files = { "tagged.json": "映画・ドラマ", "anime.json": "アニメ" };
+  // メディア芸術データベースのアニメとの重なり(同じ titleKey)。読み込み時(src/imported.ts)は TMDB の方を使う
+  if (fs.existsSync(MADB_TAGGED)) {
+    const madbAnime = JSON.parse(fs.readFileSync(MADB_TAGGED, "utf8")).filter((w) => w.media === "アニメ");
+    const keys = new Set(tagged.filter((w) => w.media === "アニメ").map((w) => titleKey(w.title)));
+    summary.overlapWithMadbAnime = {
+      count: madbAnime.filter((w) => keys.has(titleKey(w.title))).length,
+      madbAnime: madbAnime.length,
+      note: "同じ題名のアニメは、読み込み時に TMDB の方を使い、メディア芸術データベースの方は出さない(生成物は変えない)",
+    };
+  }
   fs.writeFileSync(path.join(OUT, "summary.json"), JSON.stringify(summary, null, 2) + "\n");
 
   const missed = new Map();

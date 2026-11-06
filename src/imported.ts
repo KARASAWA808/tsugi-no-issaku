@@ -81,13 +81,17 @@ export function toWork(e: ImportedEntry): Work {
 /**
  * 手書きのカタログと重なる作品(同じ種類で題名がそろう)を除いて Work にする。
  * 手書きの方にはひとことと隠れた名作の印があるので、そちらを残す。
+ * 出典どうしで重なる作品(TMDB とメディア芸術データベースの同じアニメなど)は TMDB の方を使う。
+ * TMDB にはジャンルと keywords があってタグが付きやすく、日本での配信情報もあるため。
+ * 渡す順番に関わらずそうなるよう、TMDB の件を先に見る。
  */
 export function mergeImported(handwritten: readonly Work[], entries: readonly unknown[]): Work[] {
   const taken = new Set(handwritten.map((w) => `${w.media}:${titleKey(w.title)}`));
   const ids = new Set<string>();
   const out: Work[] = [];
-  for (const e of entries) {
-    if (!isImportedEntry(e)) continue;
+  const valid = entries.filter(isImportedEntry);
+  const ordered = [...valid.filter((e) => sourceOf(e) === "tmdb"), ...valid.filter((e) => sourceOf(e) !== "tmdb")];
+  for (const e of ordered) {
     const key = `${e.media}:${titleKey(e.title)}`;
     const work = toWork(e);
     if (taken.has(key) || ids.has(work.id!)) continue;
@@ -100,7 +104,11 @@ export function mergeImported(handwritten: readonly Work[], entries: readonly un
 
 /** 取り込んだ作品を読む。別ファイルにしてあるので、結果画面を出すまで読まずに済む。片方が読めなくても、読めた方は使う */
 export async function loadImported(handwritten: readonly Work[]): Promise<Work[]> {
-  const files = await Promise.allSettled([import("../data/madb/tagged.json"), import("../data/tmdb/tagged.json")]);
+  const files = await Promise.allSettled([
+    import("../data/madb/tagged.json"),
+    import("../data/tmdb/tagged.json"),
+    import("../data/tmdb/anime.json"),
+  ]);
   const entries = files.flatMap((f) => (f.status === "fulfilled" ? (f.value.default as unknown[]) : []));
   if (files.every((f) => f.status === "rejected")) throw new Error("取り込んだ作品を読めませんでした");
   return mergeImported(handwritten, entries);

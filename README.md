@@ -2,7 +2,7 @@
 
 6作ずつ出てくる設問で、見たことのある作品に☆1〜5を付けていきます。5問答えると、☆の評価から好みタイプと「次にハマりそうな作品」6作を診断するサイトです。
 サーバーもAPIキーも不要で、内蔵カタログだけで動きます。
-カタログは手書きの150作に加えて、[メディア芸術データベース](https://mediaarts-db.artmuseums.go.jp/)から取り込んだ漫画・アニメ・ゲームと、[TMDB](https://www.themoviedb.org/)から取り込んだ映画・ドラマをおすすめに使います。このサイトは非商用です。
+カタログは手書きの150作に加えて、[メディア芸術データベース](https://mediaarts-db.artmuseums.go.jp/)から取り込んだ漫画・アニメ・ゲームと、[TMDB](https://www.themoviedb.org/)から取り込んだ映画・ドラマ・アニメをおすすめに使います。このサイトは非商用です。
 
 - 診断に使うのは☆の評価だけです。見ていない作品はそのまま次へ進めます。
 - 診断する種類(漫画・アニメ・映画・小説・ゲーム・ドラマ)はチェックボックスで選べます。複数選べます。
@@ -34,7 +34,7 @@ npm run preview  # dist/ の確認
 | `src/tagmap.ts` | 元データのジャンル語から18タグへの対応表 |
 | `scripts/import-madb.mjs` | メディア芸術データベースから作品を取り込むスクリプト(`npm run import`) |
 | `scripts/import-tmdb.mjs` | TMDB から映画・ドラマを取り込むスクリプト(`npm run import:tmdb`) |
-| `data/madb/`, `data/tmdb/` | 取り込んだ作品(生成物)。タグ付けできた `tagged.json`(サイトが読む)、件数の `summary.json`、対応表に当たらなかった語の `unmapped-genres.json` |
+| `data/madb/`, `data/tmdb/` | 取り込んだ作品(生成物)。タグ付けできた `tagged.json`(TMDB のアニメは `anime.json`。サイトが読む)、件数の `summary.json`、対応表に当たらなかった語の `unmapped-genres.json` |
 | `public/tmdb-logo.svg` | TMDB のロゴ(規約で表示が必要) |
 | `src/quiz.ts` | 設問の進行(6作を引く、次へ、戻る、入れ替える。作品が少ないと短くなる) |
 | `src/diagnose.ts` | 診断ロジック(☆の重みをタグごとに足して採点) |
@@ -77,7 +77,7 @@ npm run import -- --offline # .cache/ にあるものだけで変換し直す(�
 
 ### TMDB から映画・ドラマを取り込む
 
-映画とドラマは [TMDB](https://www.themoviedb.org/) の API(v3)から取り込めます。
+映画・ドラマと、日本のアニメ(テレビシリーズ)は [TMDB](https://www.themoviedb.org/) の API(v3)から取り込めます。
 
 ```bash
 npm run import:tmdb              # 取得(.cache/tmdb/ に保存)→ 変換 → data/tmdb/ に書き出す
@@ -86,7 +86,8 @@ npm run import:tmdb -- --offline # .cache/tmdb/ にあるものだけで変換�
 
 - API のリードアクセストークンが要りますが、スクリプトは鍵を読みません。実行する環境のプロキシが `api.themoviedb.org` への `Authorization` ヘッダーを付ける前提です(作業用のクラウド環境の network secrets に保存してあります)。鍵はリポジトリにも GitHub Actions にも置かず、ブラウザにも送りません。取り込みは CI では走らせません。
 - 映画は「日本での公開日(劇場・配信・パッケージ・TV)が TMDB に登録されている作品」、ドラマは「日本で配信情報(JustWatch 提供)がある作品」と「日本制作の作品」の和集合です。どちらも人気順で `TMDB_MAX_PAGES`(既定 250)ページまで、票数の少ない作品と成人向けは除きます。判定に使った条件は `data/tmdb/summary.json` の `conditions` にあります。
-- 日本制作のアニメのテレビシリーズはメディア芸術データベース側(アニメ)にあるので除きます。アニメ映画は手書きのカタログと同じく「映画」として入れます。
+- アニメは、ジャンルが Animation で日本の作品(制作国が日本か、原語が日本語)のテレビシリーズを「アニメ」として入れます。日本の作品なので配信情報は問いません。日本以外のアニメーション(海外のカートゥーンなど)は入れません(このサイトの「アニメ」は日本のアニメの意味で、「ドラマ」にも合わないため)。アニメ映画は手書きのカタログと同じく「映画」として入れ、「アニメ」には入れません。
+- メディア芸術データベースのアニメと同じ題名の作品は、読み込み時(`src/imported.ts`)に TMDB の方を使います(ジャンルと keywords があってタグが付きやすく、日本での配信情報もあるため)。メディア芸術データベースの生成物は変えません。重なった件数は `data/tmdb/summary.json` の `overlapWithMadbAnime` にあります。
 - ジャンル(日本語)と keywords(英語)を `src/tagmap.ts` の対応表で18タグに対応づけます。あらすじは使わず、`pitch` は空のままです。
 - TMDB の規約に合わせ、画面のフッターに TMDB のロゴと「TMDB に承認・認定されたものではない」旨、配信情報の提供元として JustWatch のクレジットを出しています。画像(ポスター)は使いません。データは取得から6か月以内に取り直す決まりなので、`data/tmdb/summary.json` の `refetchBy`(取得日の約6か月後)までに `npm run import:tmdb` を実行してコミットしてください。
 
