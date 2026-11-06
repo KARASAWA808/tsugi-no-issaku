@@ -21,9 +21,11 @@ describe("catalog", () => {
       expect(w.pitch, w.title).not.toBe("");
     }
   });
-  it("どの種類にも作品がある", () => {
+  it("どの種類にも20作以上あり、隠れた名作もある", () => {
     for (const m of MEDIA) {
-      expect(CATALOG.filter((w) => w.media === m).length, m).toBeGreaterThan(0);
+      const works = CATALOG.filter((w) => w.media === m);
+      expect(works.length, m).toBeGreaterThanOrEqual(20);
+      expect(works.some((w) => w.gem), m).toBe(true);
     }
   });
   it("タグは決まった18個だけを使い、1作に2〜4個", () => {
