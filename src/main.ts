@@ -3,11 +3,14 @@ import { CATALOG, MEDIA, type Media, type Work } from "./catalog";
 import { LIKED_RATING, diagnose } from "./diagnose";
 import { MOODS, matches, type Filter } from "./filter";
 import {
+  interestList, isInterested, parseInterest, rateAndClear, serializeInterest, toggle, unmark, type Interest,
+} from "./interest";
+import {
   TOTAL_QUESTIONS, back, canSwap, createQuiz, currentRound, isDone, isLastQuestion, next, shownWorks, swap,
   type Quiz,
 } from "./quiz";
 import {
-  RATINGS, parse, quizCatalog, rate, ratingOf, seenList, serialize, unrate, type Rating, type Seen,
+  RATINGS, parse, quizCatalog, ratingOf, seenList, serialize, unrate, type Rating, type Seen,
 } from "./seen";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -20,6 +23,7 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: 
 
 // ---- このブラウザの localStorage への保存。使えない環境ではメモリだけで動く ----
 const SEEN_KEY = "tsugi-no-issaku:seen";
+const INTEREST_KEY = "tsugi-no-issaku:interest";
 const MEDIA_KEY = "tsugi-no-issaku:media";
 const MOODS_KEY = "tsugi-no-issaku:moods";
 let storageOk = true;
@@ -53,6 +57,8 @@ function loadList<T extends string>(key: string, isValid: (x: unknown) => x is T
 }
 
 const seen: Seen = parse(load(SEEN_KEY));
+/** 「気になる」を付けた作品。☆とは別に保存する */
+const interest: Interest = parseInterest(load(INTEREST_KEY));
 const savedMedia = loadList(MEDIA_KEY, (x): x is Media => MEDIA.includes(x as Media));
 /** 診断する種類。保存がなければ全種類 */
 const media = new Set<Media>(savedMedia.length ? savedMedia : MEDIA);
@@ -74,13 +80,15 @@ function keepFocus(render: () => void) {
   if (key) document.querySelector<HTMLElement>(`[data-key="${CSS.escape(key)}"]`)?.focus();
 }
 
-/** 評価が変わったら、今の画面と見た作品の一覧を描き直す */
+/** 評価や「気になる」が変わったら保存して、今の画面と下の一覧を描き直す。☆を付けると気になるも外れるので両方保存する */
 function onSeenChange() {
   store(SEEN_KEY, serialize(seen));
+  store(INTEREST_KEY, serializeInterest(interest));
   keepFocus(() => {
     if (!$("quiz").hidden) renderQuestion();
     if (!$("result").hidden) renderResult();
     renderSeen();
+    renderInterest();
   });
 }
 
@@ -102,7 +110,7 @@ function stars(work: Work, scope: string, opts: { clearable: boolean }) {
     b.setAttribute("aria-pressed", String(current === n));
     b.onclick = () => {
       if (opts.clearable && current === n) unrate(seen, work.title);
-      else rate(seen, work.title, n as Rating);
+      else rateAndClear(seen, interest, work.title, n as Rating);
       if (scope === "pop") {
         rateMessage = `『${work.title}』を星${n}で見た作品に入れました。診断にもすぐ反映しています。付け直しや取り消しは下の「見た作品」からできます。`;
       }
@@ -111,6 +119,21 @@ function stars(work: Work, scope: string, opts: { clearable: boolean }) {
     row.append(b);
   }
   return row;
+}
+
+/**
+ * 「気になる」の切り替えボタン。まだ見ていないが興味がある作品に付ける。☆とは別で、押しても☆は変わらない。
+ * scope は stars と同じく、同じ作品が複数か所に出るときのフォーカスの区別。
+ */
+function wantButton(work: Work, scope: string) {
+  const on = isInterested(interest, work);
+  const b = el("button", "want", "気になる");
+  b.type = "button";
+  b.dataset.key = `want:${scope}:${work.title}`;
+  b.setAttribute("aria-pressed", String(on));
+  b.setAttribute("aria-label", `『${work.title}』を気になる作品に${on ? "入れている" : "入れる"}`);
+  b.onclick = () => { toggle(interest, work.title); onSeenChange(); };
+  return b;
 }
 
 // ---- 診断する種類とジャンルのチェック ----
@@ -221,10 +244,17 @@ function renderQuestion() {
   $("options").replaceChildren(
     ...round.options.map((work) => {
       const rated = ratingOf(seen, work) !== undefined;
-      const card = el("div", "opt" + (rated ? " rated" : ""));
+      const wanted = isInterested(interest, work);
+      const card = el("div", "opt" + (rated ? " rated" : wanted ? " wanted" : ""));
       const rateRow = el("div", "rate");
       rateRow.append(el("span", "rate-label", rated ? "見た" : "見たなら"), stars(work, "q", { clearable: true }));
       card.append(el("span", "kind", work.media), el("span", "name", work.title), el("span", "sub", work.pitch), rateRow);
+      // ☆を付けた作品は見たことになるので、「気になる」は出さない
+      if (!rated) {
+        const wantRow = el("div", "rate want-row");
+        wantRow.append(el("span", "rate-label", "まだなら"), wantButton(work, "q"));
+        card.append(wantRow);
+      }
       return card;
     }),
   );
@@ -260,7 +290,8 @@ function renderResult() {
   const ratings = seenList(CATALOG, seen);
   const likedCount = ratings.filter((r) => r.rating >= LIKED_RATING).length;
   const gemsOnly = $<HTMLInputElement>("gemsOnly").checked;
-  const d = diagnose({ ratings, catalog: CATALOG.filter((w) => matches(w, filterOf(gemsOnly))) });
+  const wanted = interestList(CATALOG, interest);
+  const d = diagnose({ ratings, interested: wanted, catalog: CATALOG.filter((w) => matches(w, filterOf(gemsOnly))) });
 
   $("typeName").textContent = d.typeName;
   $("typeSummary").textContent = d.summary;
@@ -278,13 +309,14 @@ function renderResult() {
         : "選んだ種類やジャンルで、まだ評価していない作品の中に好みに合うものが見つかりませんでした。種類やジャンルを増やしてみてください。";
 
   $("shelf").replaceChildren(
-    ...d.recommendations.map(({ work, from, fromRating, shared }) => {
-      const card = el("article", "pop");
+    ...d.recommendations.map(({ work, from, fromRating, shared, interested }) => {
+      const card = el("article", "pop" + (interested ? " pop-wanted" : ""));
       const top = el("div", "pop-top");
       top.append(el("span", "media", work.media));
       if (work.gem) top.append(el("span", "surprise", "隠れた名作"));
+      if (interested) top.append(el("span", "wantmark", "気になる"));
       const rateRow = el("div", "pop-rate");
-      rateRow.append(el("span", undefined, "もう見た?"), stars(work, "pop", { clearable: false }));
+      rateRow.append(el("span", undefined, "もう見た?"), stars(work, "pop", { clearable: false }), wantButton(work, "pop"));
       const foot = el("div", "pop-foot");
       const link = el("a", undefined, "作品を調べる");
       link.href = "https://www.google.com/search?q=" + encodeURIComponent(`${work.title} ${work.media}`);
@@ -306,9 +338,10 @@ function renderResult() {
   $("rateNote").textContent = rateMessage;
   const thisTime = (quiz ? shownWorks(quiz) : [])
     .filter((w) => ratingOf(seen, w) !== undefined && !ratedAtStart.has(w.title)).length;
-  $("picks").textContent = ratings.length
+  $("picks").textContent = (ratings.length
     ? `☆を付けた${ratings.length}作から診断しました。今回の設問で評価したのは${thisTime}作です。`
-    : "☆を付けた作品はまだありません。";
+    : "☆を付けた作品はまだありません。")
+    + (wanted.length ? `「気になる」を付けた${wanted.length}作も弱い手がかりにしています。` : "");
 }
 
 // ---- 見た作品の一覧 ----
@@ -336,6 +369,27 @@ function renderSeen() {
   );
 }
 
+// ---- 気になる作品の一覧 ----
+function renderInterest() {
+  const list = interestList(CATALOG, interest);
+  $("interestCount").textContent = `${list.length}作`;
+  $("interestEmpty").hidden = list.length > 0;
+  $("interestList").replaceChildren(
+    ...list.map((work) => {
+      const li = el("li");
+      const name = el("span", "seen-name");
+      name.append(el("span", "kind", work.media), el("span", undefined, work.title));
+      const off = el("button", "btn btn-quiet btn-small", "外す");
+      off.type = "button";
+      off.dataset.key = `unwant:${work.title}`;
+      off.setAttribute("aria-label", `『${work.title}』を気になる作品から外す`);
+      off.onclick = () => { unmark(interest, work.title); onSeenChange(); };
+      li.append(name, off);
+      return li;
+    }),
+  );
+}
+
 $("nextBtn").onclick = onNext;
 $("backBtn").onclick = () => { if (quiz) { back(quiz); renderQuestion(); } };
 $("swapBtn").onclick = () => { if (quiz && swap(quiz)) renderQuestion(); };
@@ -345,4 +399,5 @@ $("retryBtn").onclick = start;
 
 renderFilter();
 renderSeen();
+renderInterest();
 start();
