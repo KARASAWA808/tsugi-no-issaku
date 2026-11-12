@@ -4,6 +4,7 @@ import { CLAIM_COUNT, buildIntro } from "../lol/src/intro";
 import { CRITIC_CALL, hashString, makeRng, rankLabel } from "../lol/src/labels";
 import { buildReview } from "../lol/src/review";
 import { SAMPLE_PLAYERS, samplePlayer } from "../lol/src/sample";
+import { CLEAN_TITLES, TITLES } from "../lol/src/text/verdict-lines";
 import type { PlayerData } from "../lol/src/types";
 import { match } from "./lol-helpers";
 
@@ -116,7 +117,7 @@ describe("buildReview", () => {
     const lowest = analysis.axes.reduce((low, a) => (a.score < low.score ? a : low));
     expect(review.roasts).toHaveLength(1);
     expect(review.roasts[0].topic).toBe(lowest.key);
-    expect(review.title).toBe("言うだけのことはある人");
+    expect(CLEAN_TITLES.S).toContain(review.title);
   });
 
   it("追加の指摘は3つまで", () => {
@@ -126,7 +127,7 @@ describe("buildReview", () => {
   it("評価と称号はいちばん目立つ弱みで決まる", () => {
     const { analysis, review } = build(samplePlayer("mid-feeder")!);
     expect(review.grade).toBe(analysis.grade);
-    expect(review.title).toBe("歩く300ゴールド");
+    expect(TITLES.feeder).toContain(review.title);
     expect(review.verdict).toContain(`${analysis.overall}点`);
   });
 

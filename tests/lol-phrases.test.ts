@@ -311,6 +311,17 @@ describe("IMAGINED_PHRASES(言いそうな台詞として作ったもの)", () =
     expect(real).toBeLessThan(230);
   });
 
+  it("話題に合うのが作った台詞だけのときは、半分くらいは実際の発言に出番をゆずる", () => {
+    const mixed = book({ roast: [{ text: "実際、" }, { text: "創作の話題、", topic: "tilt", imagined: true }] });
+    let imagined = 0;
+    for (let seed = 0; seed < 300; seed++) if (makeSpeaker(mixed, makeRng(seed), "テスト")("roast", "x", "tilt") === "創作の話題、x") imagined += 1;
+    expect(imagined).toBeGreaterThan(110);
+    expect(imagined).toBeLessThan(190);
+    // 話題に合う実際の発言があるときは、いつも話題が先
+    const real = book({ roast: [{ text: "実際、" }, { text: "実際の話題、", topic: "tilt" }] });
+    for (let seed = 0; seed < 20; seed++) expect(makeSpeaker(real, makeRng(seed), "テスト")("roast", "x", "tilt")).toBe("実際の話題、x");
+  });
+
   it("混ぜても、同じ口ぐせを1回の評価で2度使わない", () => {
     const merged = mergePhrases(BUILTIN_PHRASES, IMAGINED_PHRASES);
     for (const s of SAMPLE_PLAYERS) {

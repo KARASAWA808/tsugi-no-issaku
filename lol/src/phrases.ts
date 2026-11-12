@@ -154,7 +154,11 @@ export function makeSpeaker(
     // 出番の少ないものから先に使う
     const onTopic = fresh.filter((p) => p.topic !== undefined);
     const limited = fresh.filter((p) => p.role !== undefined);
-    const pool = onTopic.length > 0 ? onTopic : limited.length > 0 ? limited : fresh;
+    // 話題に合うのが作った台詞だけのときは、2回に1回は見送って、実際の発言(話題を選ばないもの)に出番を残す
+    const general = limited.length > 0 ? limited : fresh.filter((p) => p.topic === undefined);
+    const onlyImagined = onTopic.length > 0 && onTopic.every((p) => p.imagined);
+    const skipTopic = onlyImagined && general.some((p) => !p.imagined) && rng() < 0.5;
+    const pool = onTopic.length > 0 && !skipTopic ? onTopic : general.length > 0 ? general : fresh;
     // 作った台詞は、実際の発言の半分の出やすさにする(実際の発言があるうちは、そちらが主役)
     const weightOf = (p: Phrase): number => (p.imagined ? 0.5 : 1);
     let roll = rng() * pool.reduce((total, p) => total + weightOf(p), 0);
