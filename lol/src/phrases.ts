@@ -190,13 +190,16 @@ export function makeSpeaker(
     // 出番の少ないものから先に使う
     const onTopic = fresh.filter((p) => p.topic !== undefined);
     const limited = fresh.filter((p) => p.role !== undefined);
-    // 話題に合うのが作った台詞だけのときは、2回に1回は見送って、実際の発言(話題を選ばないもの)に出番を残す
+    // 話題に合う言い回しが少ないと、だれを見ても同じ台詞が頭に付いてしまう。
+    // そこで、合うものが少ないほど見送りやすくして、話題を選ばない言い回しにも出番を残す(1つなら4割、5つ以上なら必ず使う)。
+    // 合うのが作った台詞だけのときは、多くても半分まで(実際の発言が主役)
     const general = limited.length > 0 ? limited : fresh.filter((p) => p.topic === undefined);
     const onlyImagined = onTopic.length > 0 && onTopic.every((p) => p.imagined);
-    const skipTopic = onlyImagined && general.some((p) => !p.imagined) && rng() < 0.5;
+    const chance = Math.min(onlyImagined ? 0.5 : 1, 0.25 + 0.15 * onTopic.length);
+    const useTopic = onTopic.length > 0 && (general.length === 0 || rng() < chance);
     // 使っているチャンピオンの話は出番がいちばん少ないので、あれば最優先
     const onChampion = fresh.filter((p) => p.champion !== undefined);
-    const pool = onChampion.length > 0 ? onChampion : onTopic.length > 0 && !skipTopic ? onTopic : general.length > 0 ? general : fresh;
+    const pool = onChampion.length > 0 ? onChampion : useTopic ? onTopic : general.length > 0 ? general : fresh;
     // 作った台詞は、実際の発言の半分の出やすさにする(実際の発言があるうちは、そちらが主役)
     const weightOf = (p: Phrase): number => (p.weight ?? 1) * (p.imagined ? 0.5 : 1);
     let roll = rng() * pool.reduce((total, p) => total + weightOf(p), 0);

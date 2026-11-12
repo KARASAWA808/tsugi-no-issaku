@@ -98,8 +98,8 @@ export function buildReview(player: PlayerData, analysis: Analysis, intro: Intro
   // 誰にでも当てはまるもの(最後の1つ)は、ほかに無いときと、たまに選ぶ
   const specific = fitting.slice(0, -1);
   const note = pick(pick(specific.length > 0 && extra() < 0.85 ? specific : fitting.slice(-1), extra).lines, extra)(v);
-  // 称号の枕ことばは、言い直したときに半分くらいの確率で付く(弱みから付いた称号にだけ)
-  const prefix = variant > 0 && worst && extra() < 0.5 ? pick(TITLE_PREFIXES, extra) : "";
+  // 称号の枕ことばは、半分くらいの確率で付く(弱みから付いた称号にだけ)。同じ弱みの人どうしで称号がそろいにくくなる
+  const prefix = worst && extra() < 0.5 ? pick(TITLE_PREFIXES, extra) : "";
   const few = analysis.games < 8 ? `ただ${v.games}試合しかないから、話半分で聞いて。` : "";
   const high = analysis.grade === "S" || analysis.grade === "A";
   return {

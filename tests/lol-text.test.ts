@@ -127,7 +127,8 @@ describe("buildReview", () => {
   it("評価と称号はいちばん目立つ弱みで決まる", () => {
     const { analysis, review } = build(samplePlayer("mid-feeder")!);
     expect(review.grade).toBe(analysis.grade);
-    expect(TITLES.feeder).toContain(review.title);
+    // 枕ことば(「筋金入りの」など)が前に付くことがある
+    expect(TITLES.feeder.some((title) => review.title.endsWith(title))).toBe(true);
     expect(review.verdict).toContain(`${analysis.overall}点`);
   });
 

@@ -187,15 +187,29 @@ describe("組み立ての変化(つなぎ・自慢の試合・ところで・称
     }
   });
 
-  it("称号の枕ことばは最初の1回には付かず、言い直すと付くことがある(弱みから付いた称号にだけ)", () => {
+  it("称号には枕ことばが付くことがある(弱みから付いた称号にだけ)", () => {
     const all = Object.values(TITLES).flat();
-    expect(all).toContain(build("mid-feeder", 0).review.title);
     const titles = Array.from({ length: 40 }, (_, variant) => build("mid-feeder", variant).review.title);
     expect(titles.some((t) => TITLE_PREFIXES.some((p) => t.startsWith(p)))).toBe(true);
+    expect(titles.some((t) => all.includes(t))).toBe(true);
     for (const t of titles) expect(all.some((base) => t === base || TITLE_PREFIXES.some((p) => t === `${p}${base}`)), t).toBe(true);
     // 弱みのない人の称号には付けない
     const clean = Object.values(CLEAN_TITLES).flat();
     for (let variant = 0; variant < 20; variant++) expect(clean).toContain(build("jg-solid", variant).review.title);
+  });
+
+  it("同じ成績でも、名前がちがえば称号と頭に付く口ぐせがそろいにくい", () => {
+    const base = samplePlayer("mid-feeder")!;
+    const titles = new Map<string, number>();
+    for (let i = 0; i < 200; i++) {
+      const player = { ...base, gameName: `ひと${i}` };
+      const analysis = analyze(player, JST)!;
+      const title = buildReview(player, analysis, buildIntro(player, analysis)).title;
+      titles.set(title, (titles.get(title) ?? 0) + 1);
+    }
+    // 称号7つ × 枕ことばの有無で、いちばん多い称号でも全体の1割ほど
+    expect(titles.size).toBeGreaterThanOrEqual(30);
+    expect(Math.max(...titles.values())).toBeLessThanOrEqual(30);
   });
 
   it("表には、変化が出るだけの数がある", () => {

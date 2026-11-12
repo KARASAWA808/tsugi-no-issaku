@@ -129,16 +129,26 @@ describe("makeSpeaker", () => {
     for (let seed = 0; seed < 10; seed++) expect(makeSpeaker(mixed, makeRng(seed), "テスト", "TOP")("roast", "x")).toBe("トップ限定、x");
   });
 
-  it("話題の合う言い回しをいちばん先に使い、合わない話題のものは使わない", () => {
-    const mixed = book({ roast: [{ text: "だれでも、" }, { text: "CSの話、", topic: "lowcs" }, { text: "視界の話、", topic: "blind" }, { text: "トップ限定、", role: "TOP" }] });
-    for (let seed = 0; seed < 10; seed++) {
-      const say = makeSpeaker(mixed, makeRng(seed), "テスト", "TOP");
-      expect(say("roast", "x", "lowcs")).toBe("CSの話、x");
-      // 話題のものを使い切ったら、ロール限定 → どこでも使えるもの
-      expect(say("roast", "x", "lowcs")).toBe("トップ限定、x");
-      expect(say("roast", "x", "lowcs")).toBe("だれでも、x");
-      expect(say("roast", "x", "lowcs")).toBe("x");
+  it("話題の合う言い回しが多ければ必ずそこから使い、合わない話題のものは使わない", () => {
+    const topical = ["CSの話1、", "CSの話2、", "CSの話3、", "CSの話4、", "CSの話5、"];
+    const mixed = book({ roast: [{ text: "だれでも、" }, ...topical.map((text) => ({ text, topic: "lowcs" as const })), { text: "視界の話、", topic: "blind" }] });
+    for (let seed = 0; seed < 20; seed++) {
+      const say = makeSpeaker(mixed, makeRng(seed), "テスト");
+      expect(topical.map((t) => `${t}x`)).toContain(say("roast", "x", "lowcs"));
+      // どの呼び出しでも、別の話題のものは出ない
+      for (let i = 0; i < 6; i++) expect(say("roast", "x", "lowcs")).not.toContain("視界の話");
     }
+  });
+
+  it("話題の合う言い回しが1つしかないときは、4割くらいだけ使う(だれを見ても同じ台詞にならないように)", () => {
+    const mixed = book({ roast: [{ text: "だれでも1、" }, { text: "だれでも2、" }, { text: "CSの話、", topic: "lowcs" }] });
+    let topical = 0;
+    for (let seed = 0; seed < 300; seed++) if (makeSpeaker(mixed, makeRng(seed), "テスト")("roast", "x", "lowcs") === "CSの話、x") topical += 1;
+    expect(topical).toBeGreaterThan(90);
+    expect(topical).toBeLessThan(150);
+    // 話題を選ばない言い回しが無ければ、1つしかなくても必ず使う
+    const only = book({ roast: [{ text: "CSの話、", topic: "lowcs" }] });
+    for (let seed = 0; seed < 10; seed++) expect(makeSpeaker(only, makeRng(seed), "テスト")("roast", "x", "lowcs")).toBe("CSの話、x");
   });
 
   it("複数の話題を書いた言い回しは、そのどれかの評価文に使う", () => {
@@ -166,8 +176,8 @@ describe("makeSpeaker", () => {
     for (let seed = 0; seed < 10; seed++) {
       const yasuo = makeSpeaker(mixed, makeRng(seed), "テスト", "MIDDLE", "D", new Set(["Yasuo", "Zed"]));
       expect(yasuo("aside", "", "feeder")).toBe("ヤスオの話。");
-      expect(yasuo("aside", "", "feeder")).toBe("デスの話。");
-      expect(yasuo("aside", "", "feeder")).toBe("雑談。");
+      // 残りの2つは、どちらが先でもよい
+      expect(new Set([yasuo("aside", "", "feeder"), yasuo("aside", "", "feeder")])).toEqual(new Set(["デスの話。", "雑談。"]));
       const ahri = makeSpeaker(mixed, makeRng(seed), "テスト", "MIDDLE", "D", new Set(["Ahri"]));
       expect(ahri("aside", "")).toBe("雑談。");
       expect(ahri("aside", "")).toBe("");
@@ -294,9 +304,11 @@ describe("BUILTIN_PHRASES", () => {
   });
 
   it("話題の合う口ぐせが付く(デスの多い人にはデスの話、視界のない人にはワードの話)", () => {
-    expect(text(review("mid-feeder", BUILTIN_PHRASES))).toMatch(/なんで前行ったの|仕掛けてって崩壊|何回それで死ぬ|無限に死に続ける|すごいところ入ったな|生きていれるんだ/);
-    expect(text(review("adc-noward", BUILTIN_PHRASES))).toMatch(/ワード/);
-    expect(text(review("top-farmer", BUILTIN_PHRASES))).toContain("ファームおいちい");
+    // 話題の合う口ぐせは毎回付くわけではないので、何回か言い直した中で確かめる
+    const several = (id: string) => Array.from({ length: 12 }, (_, variant) => text(review(id, BUILTIN_PHRASES, variant))).join("\n");
+    expect(several("mid-feeder")).toMatch(/なんで前行ったの|仕掛けてって崩壊|何回それで死ぬ|無限に死に続ける|すごいところ入ったな|生きていれるんだ/);
+    expect(several("adc-noward")).toMatch(/ワード/);
+    expect(several("top-farmer")).toContain("ファームおいちい");
   });
 
   /** 口ぐせなしの評価と見くらべて、各吹き出しに足されたぶんだけを取り出す */
@@ -373,15 +385,18 @@ describe("IMAGINED_PHRASES(言いそうな台詞として作ったもの)", () =
     expect(real).toBeLessThan(230);
   });
 
-  it("話題に合うのが作った台詞だけのときは、半分くらいは実際の発言に出番をゆずる", () => {
-    const mixed = book({ roast: [{ text: "実際、" }, { text: "創作の話題、", topic: "tilt", imagined: true }] });
-    let imagined = 0;
-    for (let seed = 0; seed < 300; seed++) if (makeSpeaker(mixed, makeRng(seed), "テスト")("roast", "x", "tilt") === "創作の話題、x") imagined += 1;
-    expect(imagined).toBeGreaterThan(110);
-    expect(imagined).toBeLessThan(190);
-    // 話題に合う実際の発言があるときは、いつも話題が先
-    const real = book({ roast: [{ text: "実際、" }, { text: "実際の話題、", topic: "tilt" }] });
-    for (let seed = 0; seed < 20; seed++) expect(makeSpeaker(real, makeRng(seed), "テスト")("roast", "x", "tilt")).toBe("実際の話題、x");
+  it("話題に合うのが作った台詞だけのときは、数が多くても半分くらいは実際の発言に出番をゆずる", () => {
+    const count = (imagined: boolean): number => {
+      const topical = ["話題1、", "話題2、", "話題3、", "話題4、", "話題5、"].map((text) => ({ text, topic: "tilt" as const, ...(imagined ? { imagined: true } : {}) }));
+      const mixed = book({ roast: [{ text: "実際、" }, ...topical] });
+      let hits = 0;
+      for (let seed = 0; seed < 300; seed++) if (makeSpeaker(mixed, makeRng(seed), "テスト")("roast", "x", "tilt") !== "実際、x") hits += 1;
+      return hits;
+    };
+    // 作った台詞だけなら半分くらい、実際の発言なら(5つあるので)必ず話題が先
+    expect(count(true)).toBeGreaterThan(120);
+    expect(count(true)).toBeLessThan(180);
+    expect(count(false)).toBe(300);
   });
 
   it("混ぜても、同じ口ぐせを1回の評価で2度使わない", () => {
