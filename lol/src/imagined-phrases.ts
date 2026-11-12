@@ -10,11 +10,11 @@
 //   - 「〜した方がいい」「〜やめてほしい」「〜って話」という言い切り
 // 選ぶときの決まりは実際の発言と同じ(ほかの実在の人の名前、死や暴力を願う言葉、容姿・性別に触れるものは入れない)。
 import type { Grade } from "./analyze";
-import type { Phrase, PhraseBook, PhraseTopic } from "./phrases";
+import { PLAY_TOPICS, type Phrase, type PhraseBook, type PhraseTopic } from "./phrases";
 import type { Role } from "./types";
 
 const SOURCE = "創作(話し方の傾向からの連想。実際の発言ではない)";
-type Extra = { after?: boolean; role?: Role; topic?: PhraseTopic; grades?: readonly Grade[] };
+type Extra = { after?: boolean; role?: Role; topic?: PhraseTopic | readonly PhraseTopic[]; grades?: readonly Grade[] };
 /** きつい言い回し。評価が C・D の人にだけ */
 const LOW: Extra = { grades: ["C", "D"] };
 /** 皮肉まじりの言い回し。S・A の人には出さない */
@@ -28,9 +28,10 @@ const onAfter = (topic: PhraseTopic, text: string): Phrase => make(text, { topic
 
 export const IMAGINED_PHRASES: PhraseBook = {
   opening: [
-    make("はい、じゃあ見ていきまーす"),
+    // 本文も「はい、」「どうも、」で始まることがあるので、あいさつにならない言い方にする
+    after("じゃあ見ていきまーす"),
     make("えーっと…まあいいや、見るわ"),
-    make("ｯﾁ…はい、どうぞ"),
+    make("ｯﾁ…"),
     make("あの～、これ本当に見なきゃダメですか？", NOT_HIGH),
     make("お、来たね。覚悟はできてる？"),
     make("あ～はいはいはい、こういうタイプね"),
@@ -120,11 +121,12 @@ export const IMAGINED_PHRASES: PhraseBook = {
     after("学びがないんだよね"),
     after("…まあいいや"),
     after("これ普通にダメだからね"),
-    make("TOPなんだからさぁ、", { role: "TOP" }),
-    make("JGがそれじゃ勝てないって、", { role: "JUNGLE" }),
-    make("MIDでそれはダメでしょ、", { role: "MIDDLE" }),
+    // ロールを持ち出すのは、プレイそのものへの指摘のときだけ(連戦や時間帯の話には付けない)
+    make("TOPなんだからさぁ、", { role: "TOP", topic: PLAY_TOPICS }),
+    make("JGがそれじゃ勝てないって、", { role: "JUNGLE", topic: PLAY_TOPICS }),
+    make("MIDでそれはダメでしょ、", { role: "MIDDLE", topic: PLAY_TOPICS }),
     make("ADCなんだから殴ってよ、", { role: "BOTTOM", topic: "lowdamage" }),
-    make("サポートがそれやっちゃダメなんだよね、", { role: "UTILITY" }),
+    make("サポートがそれやっちゃダメなんだよね、", { role: "UTILITY", topic: PLAY_TOPICS }),
     onAfter("feeder", "前出すぎなんだよね、マジで"),
     onAfter("grayscreen", "灰色の時間で1本アニメ見れるよ"),
     onAfter("lowcs", "ミニオンは逃げないんだから取ってよ"),
