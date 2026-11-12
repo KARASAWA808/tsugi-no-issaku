@@ -42,6 +42,15 @@ describe("parsePhrases", () => {
     expect(parsed.roast).toEqual([{ text: "トップだけ", role: "TOP" }]);
   });
 
+  it("話題の限定を読む。知らない話題のものは捨てる", () => {
+    const parsed = parsePhrases({ roast: [{ text: "CSの話", topic: "lowcs" }, { text: "書きまちがい", topic: "cs不足" }] });
+    expect(parsed.roast).toEqual([{ text: "CSの話", topic: "lowcs" }]);
+  });
+
+  it("出典の覚え書きは残す", () => {
+    expect(parsePhrases({ opening: [{ text: "はい", source: " クリップ " }] }).opening).toEqual([{ text: "はい", source: "クリップ" }]);
+  });
+
   it("前後の空白は落とす", () => {
     expect(parsePhrases({ opening: ["  はい  "] }).opening).toEqual([{ text: "はい" }]);
   });
@@ -66,6 +75,17 @@ describe("makeSpeaker", () => {
     expect(say("reject", "本文。")).toBe("いや、本文。");
   });
 
+  it("？や～で終わる言い回しには句点を足さない", () => {
+    const say = makeSpeaker(book({ accept: [{ text: "マジ？" }], reject: [{ text: "いいね～～" }], roast: [{ text: "下手！" }] }), makeRng(1), "テスト");
+    expect(say("accept", "本文。")).toBe("マジ？本文。");
+    expect(say("reject", "本文。")).toBe("いいね～～本文。");
+    expect(say("roast", "本文。")).toBe("下手！本文。");
+  });
+
+  it("後ろに付けるときも、文の切れ目がなければ句点を足す", () => {
+    expect(makeSpeaker(book({ roast: [{ text: "勝てる", after: true }] }), makeRng(1), "テスト")("roast", "本文。")).toBe("本文。勝てる。");
+  });
+
   it("after なら後ろに付ける", () => {
     expect(makeSpeaker(book({ roast: [{ text: "知らんけど。", after: true }] }), makeRng(1), "テスト")("roast", "本文。")).toBe("本文。知らんけど。");
   });
@@ -84,6 +104,23 @@ describe("makeSpeaker", () => {
   it("ロール限定の言い回しが使えるときは、先に使う", () => {
     const mixed = book({ roast: [{ text: "だれでも、" }, { text: "トップ限定、", role: "TOP" }, { text: "これも、" }] });
     for (let seed = 0; seed < 10; seed++) expect(makeSpeaker(mixed, makeRng(seed), "テスト", "TOP")("roast", "x")).toBe("トップ限定、x");
+  });
+
+  it("話題の合う言い回しをいちばん先に使い、合わない話題のものは使わない", () => {
+    const mixed = book({ roast: [{ text: "だれでも、" }, { text: "CSの話、", topic: "lowcs" }, { text: "視界の話、", topic: "blind" }, { text: "トップ限定、", role: "TOP" }] });
+    for (let seed = 0; seed < 10; seed++) {
+      const say = makeSpeaker(mixed, makeRng(seed), "テスト", "TOP");
+      expect(say("roast", "x", "lowcs")).toBe("CSの話、x");
+      // 話題のものを使い切ったら、ロール限定 → どこでも使えるもの
+      expect(say("roast", "x", "lowcs")).toBe("トップ限定、x");
+      expect(say("roast", "x", "lowcs")).toBe("だれでも、x");
+      expect(say("roast", "x", "lowcs")).toBe("x");
+    }
+  });
+
+  it("話題を渡さない場所では、話題つきの言い回しは使わない", () => {
+    const only = book({ verdictLow: [{ text: "CSの話、", topic: "lowcs" }] });
+    expect(makeSpeaker(only, makeRng(1), "テスト")("verdictLow", "x")).toBe("x");
   });
 
   it("同じ言い回しは1度だけ。使い切った場所には何も付けない", () => {
@@ -120,7 +157,9 @@ describe("buildReview と口ぐせ", () => {
         const texts = spoken.replies.filter((r) => r.accepted === accepted).map((r) => r.text);
         expect(texts.map((t) => t.startsWith(mark))).toEqual(texts.map((_, i) => i === 0));
       }
-      expect(spoken.roasts.map((r) => r.text.startsWith("【roast】、"))).toEqual(spoken.roasts.map((_, i) => i === 0));
+      // 弱みのない人への軽い指摘(軸の名前が topic)には付けない
+      const marked = spoken.roasts.filter((r) => r.text.startsWith("【roast】、"));
+      expect(marked).toHaveLength(plain.roasts.length > 0 && spoken.roasts[0].topic in { laning: 1, fighting: 1, vision: 1, survival: 1, objective: 1, consistency: 1 } ? 0 : Math.min(1, spoken.roasts.length));
       // 称号には付けない
       expect(spoken.title).toBe(plain.title);
     }
@@ -138,27 +177,70 @@ describe("buildReview と口ぐせ", () => {
 });
 
 describe("BUILTIN_PHRASES", () => {
-  it("どの場所も、読み込みと同じ決まり(80文字まで・空でない・ロール名が正しい)を守っている", () => {
+  const entries = SLOTS.flatMap((slot) => BUILTIN_PHRASES[slot].map((phrase) => ({ slot, phrase })));
+  const text = (r: ReturnType<typeof review>) =>
+    [r.opening, ...r.replies.map((x) => x.text), ...r.roasts.map((x) => x.text), r.verdict, r.homework].join("\n");
+
+  it("どの場所も、読み込みと同じ決まり(80文字まで・空でない・ロールと話題の名前が正しい)を守っている", () => {
     expect(parsePhrases(BUILTIN_PHRASES)).toEqual(BUILTIN_PHRASES);
   });
 
-  it("ロール限定の口ぐせは、そのロールのサンプルにだけ出る", () => {
-    const top = review("top-farmer", BUILTIN_PHRASES);
-    const mid = review("mid-feeder", BUILTIN_PHRASES);
-    const text = (r: typeof top) => [r.opening, ...r.replies.map((x) => x.text), ...r.roasts.map((x) => x.text), r.verdict, r.homework].join("\n");
-    expect(text(mid)).not.toContain("TOPレーナーとして");
-    expect(text(mid)).not.toContain("サポートだった");
-    expect(text(top)).not.toContain("サポートだった");
-    const sup = text(review("sup-vision", BUILTIN_PHRASES));
-    expect(sup.split("最も替えたくなかったのがサポートだった。")).toHaveLength(2);
-    expect(text(top).split("TOPレーナーとしてどうかと思う。")).toHaveLength(2);
+  it("すべてに出典が書いてある", () => {
+    for (const { phrase } of entries) expect(phrase.source, phrase.text).toBeTruthy();
   });
 
-  it("どのサンプルでも、口ぐせが少なくとも1つは入る", () => {
+  it("暴言や、容姿・性別に触れる言葉は入れていない", () => {
+    const banned = /しね|死ね|4ね|〇ね|カス|ゴミ|クソ|(?<!下手)くそ|バカ|ばか|馬鹿|BAKA|アホ|あほ|AHO|雑魚|ZAKO|ザコ|デブ|ブタ|キモ|きも|きしょ|ボケ|ファック|ファッキュ|fuck|女|ババア|頭おかしい|頭悪|頭が悪/i;
+    for (const { phrase } of entries) expect(phrase.text, phrase.text).not.toMatch(banned);
+  });
+
+  it("どの場所にも口ぐせがある", () => {
+    for (const slot of SLOTS) expect(BUILTIN_PHRASES[slot].length, slot).toBeGreaterThan(0);
+  });
+
+  it("ロール限定の口ぐせは、そのロールのサンプルにだけ出る", () => {
+    const top = /TOPレーナーとして|topレーナーじゃない/;
+    const others = SAMPLE_PLAYERS.filter((s) => s.id !== "top-farmer").map((s) => text(review(s.id, BUILTIN_PHRASES)));
+    for (const t of others) expect(t).not.toMatch(top);
+    expect(text(review("top-farmer", BUILTIN_PHRASES))).toMatch(top);
     for (const s of SAMPLE_PLAYERS) {
-      const plain = review(s.id);
-      const spoken = review(s.id, BUILTIN_PHRASES);
-      expect(spoken).not.toEqual(plain);
+      const count = text(review(s.id, BUILTIN_PHRASES)).split("最も替えたくなかったのがサポートだった。").length - 1;
+      expect(count).toBe(s.id === "sup-vision" ? 1 : 0);
+    }
+  });
+
+  it("話題の合う口ぐせが付く(デスの多い人にはデスの話、視界のない人にはワードの話)", () => {
+    expect(text(review("mid-feeder", BUILTIN_PHRASES))).toMatch(/なんで前行ったの|仕掛けてって崩壊|何回それで死ぬ|無限に死に続ける|すごいところ入ったな|生きていれるんだ/);
+    expect(text(review("adc-noward", BUILTIN_PHRASES))).toMatch(/ワード/);
+    expect(text(review("top-farmer", BUILTIN_PHRASES))).toContain("ファームおいちい");
+  });
+
+  /** 口ぐせなしの評価と見くらべて、各吹き出しに足されたぶんだけを取り出す */
+  function added(id: string, variant: number): string[] {
+    const plain = review(id, undefined, variant);
+    const spoken = review(id, BUILTIN_PHRASES, variant);
+    const pairs = [
+      [plain.opening, spoken.opening], [plain.verdict, spoken.verdict], [plain.homework, spoken.homework],
+      ...plain.replies.map((r, i) => [r.text, spoken.replies[i].text]),
+      ...plain.roasts.map((r, i) => [r.text, spoken.roasts[i].text]),
+    ];
+    return pairs.map(([a, b]) => b.replace(a, ""));
+  }
+
+  it("同じ口ぐせを1回の評価で2度使わない", () => {
+    for (const s of SAMPLE_PLAYERS) {
+      for (let variant = 0; variant < 8; variant++) {
+        const used = added(s.id, variant).filter((t) => t !== "");
+        expect(new Set(used).size, used.join(" / ")).toBe(used.length);
+      }
+    }
+  });
+
+  it("どのサンプルでも、ほとんどの吹き出しに口ぐせが付く", () => {
+    for (const s of SAMPLE_PLAYERS) {
+      const parts = added(s.id, 0);
+      // 付かないのは、弱みのない人への軽い指摘くらい
+      expect(parts.filter((t) => t !== "").length).toBeGreaterThanOrEqual(parts.length - 1);
     }
   });
 });

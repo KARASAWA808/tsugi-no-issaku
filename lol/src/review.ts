@@ -243,25 +243,26 @@ export function buildReview(player: PlayerData, analysis: Analysis, intro: Intro
     if (!claim.backed) {
       const topic = claim.topic as WeaknessId | "spirit";
       if (topic !== "spirit") mentioned.add(topic);
-      return { topic: claim.topic, accepted: false, text: say("reject", pick(DEBUNKS[topic], rng)(v)) };
+      return { topic: claim.topic, accepted: false, text: say("reject", pick(DEBUNKS[topic], rng)(v), topic) };
     }
     const topic = claim.topic as StrengthId;
     const but = BUTS.find((b) => b.strength === topic && weak.has(b.weakness) && !mentioned.has(b.weakness));
     if (but) mentioned.add(but.weakness);
     const ack = pick(ACKS[topic], rng)(v);
-    return { topic, accepted: true, text: say("accept", but ? `${ack}${but.line(v)}` : ack) };
+    return { topic, accepted: true, text: say("accept", but ? `${ack}${but.line(v)}` : ack, topic) };
   });
 
   const roasts: Roast[] = analysis.weaknesses
     .filter((w) => !mentioned.has(w.id))
     .slice(0, ROAST_LIMIT)
-    .map((w) => ({ topic: w.id, text: say("roast", pick(ROASTS[w.id], rng)(v)) }));
+    .map((w) => ({ topic: w.id, text: say("roast", pick(ROASTS[w.id], rng)(v), w.id) }));
   // 弱みがひとつも出ていない人にも、いちばん低い軸をひとつだけ指摘する
   if (analysis.weaknesses.length === 0) {
     const lowest = analysis.axes.reduce((low, a) => (a.score < low.score ? a : low));
     roasts.push({
       topic: lowest.key,
-      text: say("roast", `強いて言うなら、${lowest.label}が${lowest.score}点でいちばん低い。伸ばすならここ。`),
+      // 弱みではない軽い指摘なので、きつい口ぐせは付けない
+      text: `強いて言うなら、${lowest.label}が${lowest.score}点でいちばん低い。伸ばすならここ。`,
     });
   }
 
@@ -274,10 +275,11 @@ export function buildReview(player: PlayerData, analysis: Analysis, intro: Intro
     roasts,
     grade: analysis.grade,
     title: worst ? TITLES[worst.id] : CLEAN_TITLES[analysis.grade],
-    verdict: say(high ? "verdictHigh" : "verdictLow", pick(VERDICTS[analysis.grade], rng)(v)),
+    verdict: say(high ? "verdictHigh" : "verdictLow", pick(VERDICTS[analysis.grade], rng)(v), worst?.id),
     homework: say(
       "homework",
       worst ? HOMEWORK[worst.id](v) : `正直、課題らしい課題がない。同じことをランクを1つ上げてもやれるか、それだけ見せて。`,
+      worst?.id,
     ),
   };
 }

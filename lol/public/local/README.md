@@ -29,4 +29,8 @@
 - `{name}` と書くと、プレイヤー名に置きかわります。
 - 1つの言い回しは80文字まで。同じ言い回しは1回の評価で1度しか使わないので、たくさん入れるほど口ぐせの付く吹き出しが増えます。
 - `{ "text": "…", "role": "TOP" }` と書くと、メインロールがそのロールの人にだけ使います(`TOP` `JUNGLE` `MIDDLE` `BOTTOM` `UTILITY`)。
+- `{ "text": "…", "topic": "lowcs" }` と書くと、その話題の評価文にだけ使います。話題の名前は次のとおりです。
+  - 弱み: `feeder`(デスが多い) `grayscreen`(死んでいる時間が長い) `lowcs`(CSが少ない) `loselane`(10分CSが少ない) `blind`(視界が少ない) `nopink`(コントロールワードを買わない) `afk`(キル関与が低い) `lowdamage`(ダメージが少ない) `kdaplayer`(KDAは高いのに勝てない) `coinflip`(試合ごとの波が大きい) `tourist`(チャンピオンを使いすぎ) `losing`(勝率が低い) `nomad`(ロールが定まらない) `noobjective`(オブジェクトに絡まない)
+  - 強み: `kda` `cs` `vision` `teamfight` `damage` `solokill` `survive` `objective` `onetrick` `winrate` `firstblood` `pool` `multikill`
+- コードに入っている口ぐせ(`src/phrases.ts`)と同じ言い回しを書いても、二重には出ません。
 - 実際に聞いたことのある言い回しだけを入れてください。言っていないことを「言った」ことにしないためです。
