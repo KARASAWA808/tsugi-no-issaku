@@ -56,7 +56,9 @@ export function buildReview(player: PlayerData, analysis: Analysis, intro: Intro
       return { topic: claim.topic, accepted: false, text: say("reject", pick(DEBUNKS[topic], rng)(v), topic) };
     }
     const topic = claim.topic as StrengthId;
-    const but = BUTS.find((b) => b.strength === topic && weak.has(b.weakness) && !mentioned.has(b.weakness));
+    // 最初はいちばん筋の通る組(表の上にあるもの)。言い直すと、当てはまる組のどれか
+    const fitting = BUTS.filter((b) => b.strength === topic && weak.has(b.weakness) && !mentioned.has(b.weakness));
+    const but = fitting.length === 0 ? undefined : (options.variant ?? 0) === 0 ? fitting[0] : pick(fitting, rng);
     if (but) mentioned.add(but.weakness);
     const ack = pick(ACKS[topic], rng)(v);
     return { topic, accepted: true, text: say("accept", but ? `${ack}${but.line(v)}` : ack, topic) };

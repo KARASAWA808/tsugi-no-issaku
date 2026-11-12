@@ -29,7 +29,6 @@ export const IMAGINED_PHRASES: PhraseBook = {
     make("あの～、これ本当に見なきゃダメですか？"),
     make("お、来たね。覚悟はできてる？"),
     make("あ～はいはいはい、こういうタイプね"),
-    make("{name}さんね。はいはい"),
     make("先に言っとくけど、優しくはしないよ"),
   ],
   accept: [
