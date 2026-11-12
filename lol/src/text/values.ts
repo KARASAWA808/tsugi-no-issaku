@@ -120,11 +120,11 @@ export interface Values {
   greatPct: string;
   /** デスのうち、25分以降のものの割合(%) */
   latePct: string;
-  /** 深夜(0〜5時)以外に始めた試合の勝率(%) */
+  /** 深夜(0〜5時)以外に始めた試合の勝率(%)。そういう試合が無ければ全体の勝率 */
   dayWr: string;
-  /** 勝った直後(20分以内)に始めた試合の勝率(%) */
+  /** 勝った直後(20分以内)に始めた試合の勝率(%)。そういう試合が無ければ全体の勝率 */
   afterWinWr: string;
-  /** いちばん使うチャンピオン以外での勝率(%) */
+  /** いちばん使うチャンピオン以外での勝率(%)。1体しか使っていなければ全体の勝率 */
   otherWr: string;
   /** 1試合の平均の長さ(分) */
   avgMin: string;
@@ -228,9 +228,10 @@ export function valuesOf(player: PlayerData, a: Analysis, champName: (id: string
     ffPct: pct(a.games - a.wins > 0 ? d.surrenders / (a.games - a.wins) : 0),
     greatPct: pct(player.matches.filter((m) => (m.kills + m.assists) / Math.max(1, m.deaths) >= 5).length / a.games),
     latePct: pct(d.deaths?.late ?? 0),
-    dayWr: pct(ratio(a.wins - d.time.night.wins, a.games - d.time.night.games)),
-    afterWinWr: pct(winRateOf(d.afterWin)),
-    otherWr: pct(ratio(a.wins - top.wins, a.games - top.games)),
+    // 当てはまる試合が1つも無いときは、全体の勝率で代える(「0%」と出て話がおかしくならないように)
+    dayWr: pct(a.games - d.time.night.games > 0 ? ratio(a.wins - d.time.night.wins, a.games - d.time.night.games) : a.winRate),
+    afterWinWr: pct(d.afterWin.games > 0 ? winRateOf(d.afterWin) : a.winRate),
+    otherWr: pct(a.games - top.games > 0 ? ratio(a.wins - top.wins, a.games - top.games) : a.winRate),
     avgMin: String(Math.round(a.avg.durationMin)),
     blueWr: pct(winRateOf(d.side.blue)),
     redWr: pct(winRateOf(d.side.red)),

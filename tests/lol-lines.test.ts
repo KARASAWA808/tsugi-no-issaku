@@ -54,20 +54,21 @@ describe("文の候補の数", () => {
   const minOf = (table: Record<string, readonly unknown[]>) => Math.min(...Object.values(table).map((list) => list.length));
 
   it("どの話題にも、言い直して変わるだけの候補がある", () => {
-    expect(minOf(BOASTS)).toBeGreaterThanOrEqual(5);
-    expect(minOf(SPINS)).toBeGreaterThanOrEqual(4);
-    expect(minOf(ACKS)).toBeGreaterThanOrEqual(5);
-    expect(minOf(DEBUNKS)).toBeGreaterThanOrEqual(4);
-    expect(minOf(ROASTS)).toBeGreaterThanOrEqual(5);
-    expect(minOf(HOMEWORK)).toBeGreaterThanOrEqual(3);
-    expect(minOf(TITLES)).toBeGreaterThanOrEqual(4);
-    expect(minOf(CLEAN_TITLES)).toBeGreaterThanOrEqual(4);
-    expect(minOf(VERDICTS)).toBeGreaterThanOrEqual(6);
-    expect(GREETINGS.length).toBeGreaterThanOrEqual(10);
-    expect(CLOSINGS.length).toBeGreaterThanOrEqual(10);
-    expect(OPENINGS.length).toBeGreaterThanOrEqual(12);
-    expect(HIGHLIGHTS.length).toBeGreaterThanOrEqual(8);
-    expect(BUTS.length).toBeGreaterThanOrEqual(40);
+    expect(minOf(BOASTS)).toBeGreaterThanOrEqual(9);
+    expect(minOf(SPINS)).toBeGreaterThanOrEqual(8);
+    expect(minOf(ACKS)).toBeGreaterThanOrEqual(9);
+    expect(minOf(DEBUNKS)).toBeGreaterThanOrEqual(8);
+    expect(minOf(ROASTS)).toBeGreaterThanOrEqual(9);
+    expect(minOf(HOMEWORK)).toBeGreaterThanOrEqual(5);
+    expect(minOf(TITLES)).toBeGreaterThanOrEqual(7);
+    expect(minOf(CLEAN_TITLES)).toBeGreaterThanOrEqual(7);
+    expect(minOf(VERDICTS)).toBeGreaterThanOrEqual(10);
+    expect(GREETINGS.length).toBeGreaterThanOrEqual(20);
+    expect(CLOSINGS.length).toBeGreaterThanOrEqual(20);
+    expect(OPENINGS.length).toBeGreaterThanOrEqual(20);
+    expect(HIGHLIGHTS.length).toBeGreaterThanOrEqual(14);
+    expect(BEST_BOASTS.length).toBeGreaterThanOrEqual(14);
+    expect(BUTS.length).toBeGreaterThanOrEqual(130);
   });
 
   it("同じ話題の中に、同じ文が2つ無い", () => {
@@ -198,7 +199,6 @@ describe("組み立ての変化(つなぎ・自慢の試合・ところで・称
   });
 
   it("表には、変化が出るだけの数がある", () => {
-    expect(BEST_BOASTS.length).toBeGreaterThanOrEqual(2);
     expect(NOTES.length).toBeGreaterThanOrEqual(15);
     expect(TITLE_PREFIXES.length).toBeGreaterThanOrEqual(10);
     expect(new Set(CONNECTORS).size).toBeGreaterThanOrEqual(8);
@@ -215,11 +215,29 @@ describe("バリエーション", () => {
       ...review.roasts.map((r) => r.text), review.highlight, review.note, review.title, review.verdict, review.homework].join("\n");
   };
 
-  it("40回言い直して、同じ文章が一度も出ない", () => {
+  it("200回言い直して、同じ文章が一度も出ない", () => {
     for (const s of SAMPLE_PLAYERS) {
-      const seen = new Set(Array.from({ length: 40 }, (_, variant) => render(s.id, variant)));
-      expect(seen.size, s.id).toBe(40);
+      const seen = new Set(Array.from({ length: 200 }, (_, variant) => render(s.id, variant)));
+      expect(seen.size, s.id).toBe(200);
     }
+  });
+
+  it("1つの吹き出しだけを見ても、言い直すとよく変わる", () => {
+    const player = samplePlayer("mid-feeder")!;
+    const analysis = analyze(player, JST)!;
+    const parts = { greeting: new Set<string>(), closing: new Set<string>(), opening: new Set<string>(), verdict: new Set<string>(), best: new Set<string>(), highlight: new Set<string>() };
+    for (let variant = 0; variant < 200; variant++) {
+      const intro = buildIntro(player, analysis, { variant });
+      const review = buildReview(player, analysis, intro, { variant });
+      parts.greeting.add(intro.greeting); parts.closing.add(intro.closing); parts.best.add(intro.bestBoast);
+      parts.opening.add(review.opening); parts.verdict.add(review.verdict); parts.highlight.add(review.highlight);
+    }
+    expect(parts.greeting.size).toBeGreaterThanOrEqual(18);
+    expect(parts.closing.size).toBeGreaterThanOrEqual(18);
+    expect(parts.opening.size).toBeGreaterThanOrEqual(18);
+    expect(parts.verdict.size).toBeGreaterThanOrEqual(9);
+    expect(parts.best.size).toBeGreaterThanOrEqual(12);
+    expect(parts.highlight.size).toBeGreaterThanOrEqual(12);
   });
 
   it("言い直すと、取り上げる話題・称号・宿題も変わる", () => {
