@@ -468,7 +468,8 @@ function introAct(current: View, intro: Intro): HTMLElement {
     { class: "talk" },
     el("p", { class: "speaker me" }, current.player.gameName),
     el("p", { class: "bubble me" }, intro.greeting),
-    ...intro.claims.map((claim) => el("p", { class: "bubble me claim" }, claim.text)),
+    ...intro.claims.map((claim) => el("p", { class: "bubble me claim" }, `${claim.lead}${claim.text}`)),
+    el("p", { class: "bubble me claim" }, intro.bestBoast),
     el("p", { class: "bubble me" }, intro.closing),
   );
   const act = el("section", { class: "act", "aria-label": "自己紹介" }, actHead("②", "自己紹介", "成績から自動で作成"), talk);
@@ -511,6 +512,10 @@ function reviewAct(current: View, intro: Intro, review: Review): HTMLElement {
       ),
     );
   });
+  // 「いちばん良かった試合」の自慢には、認める・却下の判は押さずに返す
+  talk.append(
+    el("div", { class: "exchange" }, el("p", { class: "quote" }, `「${intro.bestBoast}」`), el("p", { class: "bubble critic" }, review.highlight)),
+  );
   if (review.roasts.length > 0) {
     talk.append(el("p", { class: "sub-head" }, "まだある、ちくちく"));
     for (const roast of review.roasts) talk.append(el("p", { class: "bubble critic" }, roast.text));
@@ -519,7 +524,7 @@ function reviewAct(current: View, intro: Intro, review: Review): HTMLElement {
     talk.append(el("p", { class: "sub-head" }, "脱線"));
     for (const aside of review.asides) talk.append(el("p", { class: "bubble critic aside" }, aside));
   }
-  talk.append(el("p", { class: "sub-head" }, "いちばん良かった試合"), el("p", { class: "bubble critic" }, review.highlight));
+  talk.append(el("p", { class: "sub-head" }, "ところで"), el("p", { class: "bubble critic" }, review.note));
   talk.append(
     el(
       "div",

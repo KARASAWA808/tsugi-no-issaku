@@ -107,6 +107,30 @@ export interface Values {
   bestScore: string;
   /** いちばんデスの多かった試合のKDA("1/16/3" の形) */
   worstKda: string;
+
+  // --- どの話題でも使える、追加の数字 ---
+  /** 勝ち数・負け数 */
+  wins: string;
+  losses: string;
+  /** メインロールの試合の割合(%) */
+  rolePct: string;
+  /** 負けのうち、降参で終わった割合(%) */
+  ffPct: string;
+  /** 大活躍した試合(KDAが5以上)の割合(%) */
+  greatPct: string;
+  /** デスのうち、25分以降のものの割合(%) */
+  latePct: string;
+  /** 深夜(0〜5時)以外に始めた試合の勝率(%) */
+  dayWr: string;
+  /** 勝った直後(20分以内)に始めた試合の勝率(%) */
+  afterWinWr: string;
+  /** いちばん使うチャンピオン以外での勝率(%) */
+  otherWr: string;
+  /** 1試合の平均の長さ(分) */
+  avgMin: string;
+  /** 青側・赤側それぞれの勝率(%) */
+  blueWr: string;
+  redWr: string;
 }
 
 export function valuesOf(player: PlayerData, a: Analysis, champName: (id: string) => string): Values {
@@ -119,6 +143,7 @@ export function valuesOf(player: PlayerData, a: Analysis, champName: (id: string
   const weak = d.weakSide ?? "red";
   const strong = weak === "blue" ? "red" : "blue";
   const bad = a.badChampion;
+  const ratio = (n: number, of: number): number => (of > 0 ? n / of : 0);
   return {
     name: player.gameName,
     rank: rankLabel(player.rank),
@@ -196,6 +221,19 @@ export function valuesOf(player: PlayerData, a: Analysis, champName: (id: string
     bestKda: kdaText(d.bestGame),
     bestScore: String(Math.max(...d.scores)),
     worstKda: kdaText(a.worstGame),
+
+    wins: String(a.wins),
+    losses: String(a.games - a.wins),
+    rolePct: pct(a.roleShare),
+    ffPct: pct(a.games - a.wins > 0 ? d.surrenders / (a.games - a.wins) : 0),
+    greatPct: pct(player.matches.filter((m) => (m.kills + m.assists) / Math.max(1, m.deaths) >= 5).length / a.games),
+    latePct: pct(d.deaths?.late ?? 0),
+    dayWr: pct(ratio(a.wins - d.time.night.wins, a.games - d.time.night.games)),
+    afterWinWr: pct(winRateOf(d.afterWin)),
+    otherWr: pct(ratio(a.wins - top.wins, a.games - top.games)),
+    avgMin: String(Math.round(a.avg.durationMin)),
+    blueWr: pct(winRateOf(d.side.blue)),
+    redWr: pct(winRateOf(d.side.red)),
   };
 }
 

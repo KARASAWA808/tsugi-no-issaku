@@ -369,3 +369,9 @@ export const CLOSINGS: readonly string[] = [
   "俺の伸びしろ、見えましたか! 評価をお願いします!",
   "これが俺のLoLです。点数、楽しみにしてます!",
 ];
+
+/** 自己紹介の最後に、自分から持ち出す「いちばん良かった試合」の自慢。評価役は HIGHLIGHTS で返す */
+export const BEST_BOASTS: readonly Line[] = [
+  (v) => `ちなみに、いちばんの自信作は${v.bestChamp}で${v.bestKda}の試合です。あれが本当の俺です。`,
+  (v) => `${v.bestChamp}で${v.bestKda}を出した試合、ぜひ見てください。あの日の俺は止められませんでした。`,
+];

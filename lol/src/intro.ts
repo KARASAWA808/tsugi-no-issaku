@@ -3,7 +3,8 @@
 import type { Analysis, StrengthId, WeaknessId } from "./analyze";
 import { choose, hashString, makeRng, pick } from "./labels";
 import type { PhraseBook } from "./phrases";
-import { BOASTS, CLOSINGS, GREETINGS, SPINS } from "./text/intro-lines";
+import { BEST_BOASTS, BOASTS, CLOSINGS, GREETINGS, SPINS } from "./text/intro-lines";
+import { CONNECTORS } from "./text/note-lines";
 import { valuesOf } from "./text/values";
 import type { PlayerData } from "./types";
 
@@ -14,11 +15,15 @@ export interface Claim {
   /** 数字の裏づけがある強みなら true。弱みの言い換えや気合いだけなら false */
   backed: boolean;
   text: string;
+  /** 前に置くつなぎの言葉(「それと、」など)。1つ目と、つなぎを置かないときは空 */
+  lead: string;
 }
 
 export interface Intro {
   greeting: string;
   claims: Claim[];
+  /** 最後に自分から持ち出す、いちばん良かった試合の自慢 */
+  bestBoast: string;
   closing: string;
 }
 
@@ -50,17 +55,21 @@ export function buildIntro(player: PlayerData, analysis: Analysis, options: Text
     topic: t.id,
     backed: true,
     text: pick(BOASTS[t.id], rng)(v),
+    lead: "",
   }));
   // 足りないぶんは、弱みを言い換えて埋める。「KDAは高いのに勝てない」は強みの側で話に出るので使わない
   const spinnable = analysis.weaknesses.filter((w) => !(w.id === "kdaplayer" && claims.some((c) => c.topic === "kda")));
   for (const w of choose(spinnable, CLAIM_COUNT - claims.length, rng, variant)) {
-    claims.push({ topic: w.id, backed: false, text: pick(SPINS[w.id], rng)(v) });
+    claims.push({ topic: w.id, backed: false, text: pick(SPINS[w.id], rng)(v), lead: "" });
   }
   const spirits = [...SPINS.spirit];
   while (claims.length < CLAIM_COUNT && spirits.length > 0) {
     const line = spirits.splice(Math.floor(rng() * spirits.length), 1)[0];
-    claims.push({ topic: "spirit", backed: false, text: line(v) });
+    claims.push({ topic: "spirit", backed: false, text: line(v), lead: "" });
   }
+  // 2つ目からは、つなぎの言葉を置くことがある。口調を変える別の乱数で選び、文の選ばれ方には影響させない
+  const tone = makeRng(seedOf(player, options.variant) ^ 0x1b873593);
+  for (const claim of claims.slice(1)) claim.lead = pick(CONNECTORS, tone);
 
-  return { greeting: pick(GREETINGS, rng)(v), claims, closing: pick(CLOSINGS, rng) };
+  return { greeting: pick(GREETINGS, rng)(v), claims, bestBoast: pick(BEST_BOASTS, tone)(v), closing: pick(CLOSINGS, rng) };
 }

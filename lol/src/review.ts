@@ -5,6 +5,7 @@ import { type Intro, type TextOptions, type Topic, seedOf, valuesOf } from "./in
 import { choose, makeRng, pick } from "./labels";
 import { emptyBook, makeSpeaker } from "./phrases";
 import { ACKS, BUTS, DEBUNKS } from "./text/reply-lines";
+import { NOTES, TITLE_PREFIXES } from "./text/note-lines";
 import { CLEAN_TITLES, HIGHLIGHTS, HOMEWORK, NO_HOMEWORK, OPENINGS, ROASTS, TITLES, VERDICTS } from "./text/verdict-lines";
 import type { PlayerData } from "./types";
 
@@ -29,8 +30,10 @@ export interface Review {
   /** 脱線。評価とは関係なく挟まる独立したひとこと(雑談、長い台詞、使っているチャンピオンの話)。口ぐせが無ければ空 */
   asides: string[];
   grade: Grade;
-  /** いちばん出来の良かった試合へのひとこと */
+  /** 自己紹介の「いちばん良かった試合」の自慢への返事 */
   highlight: string;
+  /** 「ところで」のひとこと。強みや弱みと言うほどではない、目に付いた数字に触れる */
+  note: string;
   /** ひとことで言うとどんなプレイヤーか */
   title: string;
   verdict: string;
@@ -88,6 +91,15 @@ export function buildReview(player: PlayerData, analysis: Analysis, intro: Intro
   // 雑談のほうは、チャンピオンの話に出番を取られないよう、チャンピオンを知らない別の話し手に選ばせる
   const chat = makeSpeaker(options.phrases ?? emptyBook(), makeRng(seedOf(player, options.variant) ^ 0x7f4a7c15), player.gameName, analysis.mainRole, analysis.grade);
   const asides = [...new Set([say("aside", "", worst?.id), chat("aside", "")])].filter((text) => text !== "");
+  // 「ところで」と称号の枕ことばは、別の乱数で選ぶ(足しても、ほかの文の選ばれ方は変わらない)
+  const extra = makeRng(seedOf(player, options.variant) ^ 0x3c6ef372);
+  const traits = new Set<string>([...analysis.strengths, ...analysis.weaknesses].map((t) => t.id));
+  const fitting = NOTES.filter((n) => n.when(analysis, (id) => traits.has(id)));
+  // 誰にでも当てはまるもの(最後の1つ)は、ほかに無いときと、たまに選ぶ
+  const specific = fitting.slice(0, -1);
+  const note = pick(pick(specific.length > 0 && extra() < 0.85 ? specific : fitting.slice(-1), extra).lines, extra)(v);
+  // 称号の枕ことばは、言い直したときに半分くらいの確率で付く(弱みから付いた称号にだけ)
+  const prefix = variant > 0 && worst && extra() < 0.5 ? pick(TITLE_PREFIXES, extra) : "";
   const few = analysis.games < 8 ? `ただ${v.games}試合しかないから、話半分で聞いて。` : "";
   const high = analysis.grade === "S" || analysis.grade === "A";
   return {
@@ -97,7 +109,8 @@ export function buildReview(player: PlayerData, analysis: Analysis, intro: Intro
     asides,
     grade: analysis.grade,
     highlight: pick(HIGHLIGHTS, rng)(v),
-    title: pick(worst ? TITLES[worst.id] : CLEAN_TITLES[analysis.grade], rng),
+    note,
+    title: `${prefix}${pick(worst ? TITLES[worst.id] : CLEAN_TITLES[analysis.grade], rng)}`,
     verdict: say(high ? "verdictHigh" : "verdictLow", pick(VERDICTS[analysis.grade], rng)(v), worst?.id),
     homework: say(
       "homework",

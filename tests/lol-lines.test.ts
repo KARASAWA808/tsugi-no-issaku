@@ -4,7 +4,8 @@ import { analyze } from "../lol/src/analyze";
 import { buildIntro } from "../lol/src/intro";
 import { buildReview } from "../lol/src/review";
 import { SAMPLE_PLAYERS, samplePlayer } from "../lol/src/sample";
-import { BOASTS, CLOSINGS, GREETINGS, SPINS } from "../lol/src/text/intro-lines";
+import { BEST_BOASTS, BOASTS, CLOSINGS, GREETINGS, SPINS } from "../lol/src/text/intro-lines";
+import { CONNECTORS, NOTES, TITLE_PREFIXES } from "../lol/src/text/note-lines";
 import { ACKS, BUTS, DEBUNKS } from "../lol/src/text/reply-lines";
 import { type Line, type Values, valuesOf } from "../lol/src/text/values";
 import { CLEAN_TITLES, HIGHLIGHTS, HOMEWORK, NO_HOMEWORK, OPENINGS, ROASTS, TITLES, VERDICTS } from "../lol/src/text/verdict-lines";
@@ -35,6 +36,7 @@ const tables: [string, Record<string, readonly Line[]>][] = [
 ];
 const lists: [string, readonly Line[]][] = [
   ["GREETINGS", GREETINGS], ["OPENINGS", OPENINGS], ["HIGHLIGHTS", HIGHLIGHTS], ["NO_HOMEWORK", NO_HOMEWORK], ["BUTS", BUTS.map((b) => b.line)],
+  ["BEST_BOASTS", BEST_BOASTS], ["NOTES", NOTES.flatMap((n) => n.lines)],
 ];
 const everyLine: [string, Line][] = [
   ...tables.flatMap(([name, table]) => Object.entries(table).flatMap(([key, lines]) => lines.map((line): [string, Line] => [`${name}.${key}`, line]))),
@@ -42,6 +44,8 @@ const everyLine: [string, Line][] = [
 ];
 const fixedTexts: [string, string][] = [
   ...CLOSINGS.map((t): [string, string] => ["CLOSINGS", t]),
+  ...CONNECTORS.map((t): [string, string] => ["CONNECTORS", t]),
+  ...TITLE_PREFIXES.map((t): [string, string] => ["TITLE_PREFIXES", t]),
   ...Object.entries(TITLES).flatMap(([key, list]) => list.map((t): [string, string] => [`TITLES.${key}`, t])),
   ...Object.entries(CLEAN_TITLES).flatMap(([key, list]) => list.map((t): [string, string] => [`CLEAN_TITLES.${key}`, t])),
 ];
@@ -135,14 +139,80 @@ describe("BUTS(強みを認めたあとの「ただし」)", () => {
   });
 });
 
+describe("組み立ての変化(つなぎ・自慢の試合・ところで・称号の枕ことば)", () => {
+  const build = (id: string, variant: number) => {
+    const player = samplePlayer(id)!;
+    const analysis = analyze(player, JST)!;
+    const intro = buildIntro(player, analysis, { variant });
+    return { analysis, intro, review: buildReview(player, analysis, intro, { variant }) };
+  };
+
+  it("自己紹介の1つ目にはつなぎを置かず、2つ目からは表のどれかを置く", () => {
+    for (const s of SAMPLE_PLAYERS) {
+      for (let variant = 0; variant < 10; variant++) {
+        const { intro } = build(s.id, variant);
+        expect(intro.claims[0].lead).toBe("");
+        for (const claim of intro.claims.slice(1)) expect(CONNECTORS).toContain(claim.lead);
+      }
+    }
+  });
+
+  it("自己紹介の最後に、いちばん良かった試合を自分から持ち出す", () => {
+    for (const s of SAMPLE_PLAYERS) {
+      const { analysis, intro } = build(s.id, 0);
+      expect(intro.bestBoast).toContain(analysis.detail.bestGame.champion);
+      expect(intro.bestBoast).toContain(`${analysis.detail.bestGame.kills}/${analysis.detail.bestGame.deaths}/${analysis.detail.bestGame.assists}`);
+    }
+  });
+
+  it("「ところで」は必ず1つ出て、どの人でも条件に合うものが少なくとも1つある", () => {
+    for (const s of SAMPLE_PLAYERS) for (let variant = 0; variant < 10; variant++) expect(build(s.id, variant).review.note.length).toBeGreaterThan(10);
+    for (const p of players) {
+      const a = analyze(p, JST)!;
+      expect(NOTES.filter((n) => n.when(a, () => false)).length).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it("「ところで」は、もう弱みとして話に出ていることを繰り返さない", () => {
+    // mid-feeder は marathon(連戦)・nightloss(深夜)・ff(降参)・pinger(ピン)の弱みがある
+    const notes = Array.from({ length: 40 }, (_, variant) => build("mid-feeder", variant).review.note).join("\n");
+    expect(notes).not.toMatch(/連戦|深夜|降参|ピン/);
+  });
+
+  it("「ところで」は言い直すと変わる", () => {
+    for (const s of SAMPLE_PLAYERS) {
+      const seen = new Set(Array.from({ length: 30 }, (_, variant) => build(s.id, variant).review.note));
+      expect(seen.size, s.id).toBeGreaterThanOrEqual(4);
+    }
+  });
+
+  it("称号の枕ことばは最初の1回には付かず、言い直すと付くことがある(弱みから付いた称号にだけ)", () => {
+    const all = Object.values(TITLES).flat();
+    expect(all).toContain(build("mid-feeder", 0).review.title);
+    const titles = Array.from({ length: 40 }, (_, variant) => build("mid-feeder", variant).review.title);
+    expect(titles.some((t) => TITLE_PREFIXES.some((p) => t.startsWith(p)))).toBe(true);
+    for (const t of titles) expect(all.some((base) => t === base || TITLE_PREFIXES.some((p) => t === `${p}${base}`)), t).toBe(true);
+    // 弱みのない人の称号には付けない
+    const clean = Object.values(CLEAN_TITLES).flat();
+    for (let variant = 0; variant < 20; variant++) expect(clean).toContain(build("jg-solid", variant).review.title);
+  });
+
+  it("表には、変化が出るだけの数がある", () => {
+    expect(BEST_BOASTS.length).toBeGreaterThanOrEqual(2);
+    expect(NOTES.length).toBeGreaterThanOrEqual(15);
+    expect(TITLE_PREFIXES.length).toBeGreaterThanOrEqual(10);
+    expect(new Set(CONNECTORS).size).toBeGreaterThanOrEqual(8);
+  });
+});
+
 describe("バリエーション", () => {
   const render = (id: string, variant: number): string => {
     const player = samplePlayer(id)!;
     const analysis = analyze(player, JST)!;
     const intro = buildIntro(player, analysis, { variant });
     const review = buildReview(player, analysis, intro, { variant });
-    return [intro.greeting, ...intro.claims.map((c) => c.text), intro.closing, review.opening, ...review.replies.map((r) => r.text),
-      ...review.roasts.map((r) => r.text), review.highlight, review.title, review.verdict, review.homework].join("\n");
+    return [intro.greeting, ...intro.claims.map((c) => `${c.lead}${c.text}`), intro.bestBoast, intro.closing, review.opening, ...review.replies.map((r) => r.text),
+      ...review.roasts.map((r) => r.text), review.highlight, review.note, review.title, review.verdict, review.homework].join("\n");
   };
 
   it("40回言い直して、同じ文章が一度も出ない", () => {
