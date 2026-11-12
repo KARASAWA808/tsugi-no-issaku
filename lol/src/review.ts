@@ -3,6 +3,7 @@
 import type { Analysis, AxisKey, Grade, StrengthId, WeaknessId } from "./analyze";
 import { type Intro, type Line, type TextOptions, type Topic, seedOf, valuesOf } from "./intro";
 import { makeRng, pick } from "./labels";
+import { emptyBook, makeSpeaker } from "./phrases";
 import type { PlayerData } from "./types";
 
 export interface Reply {
@@ -233,6 +234,8 @@ export function buildReview(player: PlayerData, analysis: Analysis, intro: Intro
   // 自己紹介と同じ種だと同じ番号の文を引きやすいので、ずらしておく
   const rng = makeRng(seedOf(player, options.variant) ^ 0x5bd1e995);
   const v = valuesOf(player, analysis, options.champName ?? ((id) => id));
+  // 口ぐせは別の乱数で選ぶ。口ぐせを足しても、元の評価文の選ばれ方は変わらない
+  const say = makeSpeaker(options.phrases ?? emptyBook(), makeRng(seedOf(player, options.variant) ^ 0x2c1b3c6d), player.gameName);
   const weak = new Set(analysis.weaknesses.map((w) => w.id));
   const mentioned = new Set<WeaknessId>();
 
@@ -240,39 +243,41 @@ export function buildReview(player: PlayerData, analysis: Analysis, intro: Intro
     if (!claim.backed) {
       const topic = claim.topic as WeaknessId | "spirit";
       if (topic !== "spirit") mentioned.add(topic);
-      return { topic: claim.topic, accepted: false, text: pick(DEBUNKS[topic], rng)(v) };
+      return { topic: claim.topic, accepted: false, text: say("reject", pick(DEBUNKS[topic], rng)(v)) };
     }
     const topic = claim.topic as StrengthId;
     const but = BUTS.find((b) => b.strength === topic && weak.has(b.weakness) && !mentioned.has(b.weakness));
     if (but) mentioned.add(but.weakness);
     const ack = pick(ACKS[topic], rng)(v);
-    return { topic, accepted: true, text: but ? `${ack}${but.line(v)}` : ack };
+    return { topic, accepted: true, text: say("accept", but ? `${ack}${but.line(v)}` : ack) };
   });
 
   const roasts: Roast[] = analysis.weaknesses
     .filter((w) => !mentioned.has(w.id))
     .slice(0, ROAST_LIMIT)
-    .map((w) => ({ topic: w.id, text: pick(ROASTS[w.id], rng)(v) }));
+    .map((w) => ({ topic: w.id, text: say("roast", pick(ROASTS[w.id], rng)(v)) }));
   // 弱みがひとつも出ていない人にも、いちばん低い軸をひとつだけ指摘する
   if (analysis.weaknesses.length === 0) {
     const lowest = analysis.axes.reduce((low, a) => (a.score < low.score ? a : low));
     roasts.push({
       topic: lowest.key,
-      text: `強いて言うなら、${lowest.label}が${lowest.score}点でいちばん低い。伸ばすならここ。`,
+      text: say("roast", `強いて言うなら、${lowest.label}が${lowest.score}点でいちばん低い。伸ばすならここ。`),
     });
   }
 
   const worst = analysis.weaknesses[0];
   const few = analysis.games < 8 ? `ただ${v.games}試合しかないから、話半分で聞いて。` : "";
+  const high = analysis.grade === "S" || analysis.grade === "A";
   return {
-    opening: `${pick(OPENINGS, rng)(v)}${few}`,
+    opening: say("opening", `${pick(OPENINGS, rng)(v)}${few}`),
     replies,
     roasts,
     grade: analysis.grade,
     title: worst ? TITLES[worst.id] : CLEAN_TITLES[analysis.grade],
-    verdict: pick(VERDICTS[analysis.grade], rng)(v),
-    homework: worst
-      ? HOMEWORK[worst.id](v)
-      : `正直、課題らしい課題がない。同じことをランクを1つ上げてもやれるか、それだけ見せて。`,
+    verdict: say(high ? "verdictHigh" : "verdictLow", pick(VERDICTS[analysis.grade], rng)(v)),
+    homework: say(
+      "homework",
+      worst ? HOMEWORK[worst.id](v) : `正直、課題らしい課題がない。同じことをランクを1つ上げてもやれるか、それだけ見せて。`,
+    ),
   };
 }

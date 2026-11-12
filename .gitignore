@@ -3,3 +3,7 @@ dist
 .DS_Store
 *.local
 .cache
+# 辛口道場に手元でだけ使う素材(写真・ロゴ・自分で足した口ぐせ)。公開リポジトリには入れない
+lol/public/local/*
+!lol/public/local/README.md
+!lol/public/local/phrases.example.json

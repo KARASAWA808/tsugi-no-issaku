@@ -4,6 +4,7 @@ import "./style.css";
 import { type Analysis, type Axis, analyze } from "./analyze";
 import { type Intro, buildIntro } from "./intro";
 import { CRITIC_NAME, ROLE_LABELS, f1, pct, rankLabel } from "./labels";
+import { BUILTIN_PHRASES, type PhraseBook, emptyBook, mergePhrases, parsePhrases } from "./phrases";
 import { type Review, buildReview } from "./review";
 import { SAMPLE_PLAYERS, samplePlayer } from "./sample";
 import type { ApiError, PlayerData } from "./types";
@@ -100,6 +101,43 @@ async function loadDragon(): Promise<void> {
 
 const champName = (id: string): string => dragon?.names.get(id) ?? id;
 
+// --- 手元にだけ置く素材(lol/public/local/)。git 管理外なので、無いのがふつう。あれば使う ---
+interface LocalAssets {
+  /** 評価役のアイコンにする画像 */
+  avatar: string | null;
+  /** ③ の見出しに出すロゴ */
+  logo: string | null;
+  /** 自分で足した口ぐせ */
+  phrases: PhraseBook;
+}
+const local: LocalAssets = { avatar: null, logo: null, phrases: emptyBook() };
+
+/** 候補を順に試し、画像として読めた最初のものを返す */
+async function findImage(candidates: readonly string[]): Promise<string | null> {
+  for (const src of candidates) {
+    const ok = await new Promise<boolean>((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve(img.naturalWidth > 0);
+      img.onerror = () => resolve(false);
+      img.src = src;
+    });
+    if (ok) return src;
+  }
+  return null;
+}
+
+async function loadLocal(): Promise<void> {
+  const images = (name: string): string[] => ["png", "jpg", "jpeg", "webp"].map((ext) => `local/${name}.${ext}`);
+  const [avatar, logo, phrases] = await Promise.all([
+    findImage(images("critic")),
+    findImage(images("logo")),
+    // ファイルが無いと開発サーバーは index.html を返すので、JSON として読めなければ「無い」とみなす
+    fetch("local/phrases.json").then((res) => (res.ok ? res.json() : null)).then(parsePhrases).catch(() => emptyBook()),
+  ]);
+  Object.assign(local, { avatar, logo, phrases });
+  if (view) render();
+}
+
 // --- 前回の入力を覚えておく(localStorage が使えなければ覚えないだけ) ---
 function restoreLast(): void {
   try {
@@ -169,12 +207,13 @@ function championIcon(id: string): HTMLElement {
   return icon;
 }
 
-function actHead(num: string, title: string, tag = ""): HTMLElement {
+function actHead(num: string, title: string, tag = "", logo: string | null = null): HTMLElement {
   return el(
     "div",
     { class: "act-head" },
     el("span", { class: "num", "aria-hidden": "true" }, num),
     el("h2", { tabindex: "-1" }, title),
+    logo ? el("img", { class: "logo", src: logo, alt: "" }) : null,
     tag ? el("span", { class: "tag" }, tag) : null,
   );
 }
@@ -270,7 +309,13 @@ function introAct(current: View, intro: Intro): HTMLElement {
 
 // --- ③ 辛口評価 ---
 const criticLabel = (): HTMLElement =>
-  el("p", { class: "speaker critic" }, CRITIC_NAME, el("span", { class: "unofficial" }, "非公式・自動生成"));
+  el(
+    "p",
+    { class: "speaker critic" },
+    local.avatar ? el("img", { class: "avatar", src: local.avatar, alt: "" }) : null,
+    CRITIC_NAME,
+    el("span", { class: "unofficial" }, "非公式・自動生成"),
+  );
 
 function reviewAct(current: View, intro: Intro, review: Review): HTMLElement {
   const talk = el("div", { class: "talk reveal" }, criticLabel(), el("p", { class: "bubble critic" }, review.opening));
@@ -324,7 +369,7 @@ function reviewAct(current: View, intro: Intro, review: Review): HTMLElement {
   return el(
     "section",
     { class: "act", id: "review", "aria-label": "辛口評価" },
-    actHead("③", `${CRITIC_NAME}の辛口評価`, "架空のキャラクター"),
+    actHead("③", `${CRITIC_NAME}の辛口評価`, "非公式のパロディ", local.logo),
     talk,
     el("div", { class: "actions" }, again, other),
   );
@@ -347,7 +392,7 @@ function render(): void {
     result.replaceChildren();
     return;
   }
-  const options = { variant: view.variant, champName };
+  const options = { variant: view.variant, champName, phrases: mergePhrases(BUILTIN_PHRASES, local.phrases) };
   const intro = buildIntro(view.player, view.analysis, options);
   const sections = [profileAct(view), introAct(view, intro)];
   if (view.revealed) sections.push(reviewAct(view, intro, buildReview(view.player, view.analysis, intro, options)));
@@ -435,6 +480,7 @@ function init(): void {
 
   void checkKey();
   void loadDragon();
+  void loadLocal();
 }
 
 init();

@@ -2,6 +2,7 @@
 // 強みが3つに足りないときは、弱みを強気に言い換えて埋める(あとで評価役に崩される前フリ)。
 import type { Analysis, StrengthId, WeaknessId } from "./analyze";
 import { CRITIC_CALL, ROLE_LABELS, f1, hashString, makeRng, pct, pick, rankLabel } from "./labels";
+import type { PhraseBook } from "./phrases";
 import type { PlayerData } from "./types";
 
 export type Topic = StrengthId | WeaknessId | "spirit";
@@ -24,6 +25,8 @@ export interface TextOptions {
   variant?: number;
   /** チャンピオンIDを表示名にする(日本語名が取れていればそれを返す) */
   champName?: (id: string) => string;
+  /** 評価役の口ぐせ。評価文(review)の前後に差し込む。自己紹介には使わない */
+  phrases?: PhraseBook;
 }
 
 /** 文章に差し込む、整形ずみの数字 */
