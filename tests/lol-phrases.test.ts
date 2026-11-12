@@ -34,7 +34,7 @@ describe("parsePhrases", () => {
 
   it("長すぎる言い回しと、多すぎるぶんは入れない", () => {
     expect(parsePhrases({ roast: ["あ".repeat(81), "い".repeat(80)] }).roast).toHaveLength(1);
-    expect(parsePhrases({ roast: Array.from({ length: 200 }, (_, i) => `口ぐせ${i}`) }).roast).toHaveLength(60);
+    expect(parsePhrases({ roast: Array.from({ length: 500 }, (_, i) => `口ぐせ${i}`) }).roast).toHaveLength(200);
   });
 
   it("ロール限定を読む。知らないロール名のものは、全員に出ないよう捨てる", () => {
@@ -78,7 +78,8 @@ describe("makeSpeaker", () => {
   it("？や～で終わる言い回しには句点を足さない", () => {
     const say = makeSpeaker(book({ accept: [{ text: "マジ？" }], reject: [{ text: "いいね～～" }], roast: [{ text: "下手！" }] }), makeRng(1), "テスト");
     expect(say("accept", "本文。")).toBe("マジ？本文。");
-    expect(say("reject", "本文。")).toBe("いいね～～本文。");
+    // 伸ばしで終わるときは、句点の代わりに1字あける
+    expect(say("reject", "本文。")).toBe("いいね～～ 本文。");
     expect(say("roast", "本文。")).toBe("下手！本文。");
   });
 
@@ -189,9 +190,27 @@ describe("BUILTIN_PHRASES", () => {
     for (const { phrase } of entries) expect(phrase.source, phrase.text).toBeTruthy();
   });
 
-  it("暴言や、容姿・性別に触れる言葉は入れていない", () => {
-    const banned = /しね|死ね|4ね|〇ね|カス|ゴミ|クソ|(?<!下手)くそ|バカ|ばか|馬鹿|BAKA|アホ|あほ|AHO|雑魚|ZAKO|ザコ|デブ|ブタ|キモ|きも|きしょ|ボケ|ファック|ファッキュ|fuck|女|ババア|頭おかしい|頭悪|頭が悪/i;
+  it("死や暴力を願う言葉は入れていない(「バカ」「カス」のような暴言は、遊ぶ本人が望んだので入れている)", () => {
+    // 「死ぬな」「殺されてた」「殴り返す」はゲームの中の話なので引っかけない
+    const banned = /しね|死ね|死んで|死んどけ|しんどけ|4ね|〇ね|56[しせ]|ぶん殴|殺す|殺せ/;
     for (const { phrase } of entries) expect(phrase.text, phrase.text).not.toMatch(banned);
+  });
+
+  it("容姿・体型・性別に触れる言葉は入れていない", () => {
+    const banned = /女|男|ババア|ジジイ|デブ|ブタ|太っ|体型|体脂肪|メガネ|ブス|生え際|顔キモ|ちんちん/;
+    for (const { phrase } of entries) expect(phrase.text, phrase.text).not.toMatch(banned);
+  });
+
+  it("ほかの実在の人の名前は入れていない(名指しの発言は {name} に置きかえる)", () => {
+    // シートに出てくる、まわりの配信者・選手の呼び名
+    const names = /zerost|ぜろすと|ゼロスト|たかや|たかス|じゃす|ジャス|しゃる|スタンミ|スタは|忍者|にんにん|なぎさっち|とおこ|葛葉|くずは|evi|えび|みっちー|ヘンディー|ローレン|UG|あかりん|メイカ|めいか|ボドカ|おぼ|象先輩|釈迦|shaka|k4sen|かせん|アルファ|INO|りーちゃん|ひなーの|ひなの|うるーか|よむ|よいち|day1|ta1yo|清川|増永|増アカ|代表|faker|zeus|菅原|村瀬|星野|らむち|なちょ|ういにゃん|あーちゃん|マーブル|わらぶい|ハムさん|ゆきお|rain/i;
+    for (const { phrase } of entries) expect(phrase.text, phrase.text).not.toMatch(names);
+  });
+
+  it("加工したものは、出典に何をしたか書いてある", () => {
+    for (const { phrase } of entries) {
+      if (phrase.text.includes("{name}")) expect(phrase.source, phrase.text).toMatch(/名前を置きかえ/);
+    }
   });
 
   it("どの場所にも口ぐせがある", () => {
