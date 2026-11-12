@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { analyze } from "../lol/src/analyze";
 import { buildIntro } from "../lol/src/intro";
 import { makeRng } from "../lol/src/labels";
-import { BUILTIN_PHRASES, type PhraseBook, SLOTS, countPhrases, emptyBook, makeSpeaker, mergePhrases, parsePhrases } from "../lol/src/phrases";
+import { IMAGINED_PHRASES } from "../lol/src/imagined-phrases";
+import { BUILTIN_PHRASES, PHRASE_TOPICS, type PhraseBook, SLOTS, countPhrases, emptyBook, makeSpeaker, mergePhrases, parsePhrases } from "../lol/src/phrases";
 import { buildReview } from "../lol/src/review";
 import { SAMPLE_PLAYERS, samplePlayer } from "../lol/src/sample";
 
@@ -178,6 +179,12 @@ describe("buildReview と口ぐせ", () => {
   });
 });
 
+// 「死ぬな」「殺されてた」「殴り返す」はゲームの中の話なので引っかけない
+const BANNED_VIOLENCE = /しね|死ね|死んで|死んどけ|しんどけ|4ね|〇ね|56[しせ]|ぶん殴|殺す|殺せ/;
+const BANNED_BODY = /女|男|ババア|ジジイ|デブ|ブタ|太っ|体型|体脂肪|メガネ|ブス|生え際|顔キモ|ちんちん/;
+// シートに出てくる、まわりの配信者・選手の呼び名
+const BANNED_NAMES = /zerost|ぜろすと|ゼロスト|たかや|たかス|じゃす|ジャス|しゃる|スタンミ|スタは|忍者|にんにん|なぎさっち|とおこ|葛葉|くずは|evi|えび|みっちー|ヘンディー|ローレン|UG|あかりん|メイカ|めいか|ボドカ|おぼ|象先輩|釈迦|shaka|k4sen|かせん|アルファ|INO|りーちゃん|ひなーの|ひなの|うるーか|よむ|よいち|day1|ta1yo|清川|増永|増アカ|代表|faker|zeus|菅原|村瀬|星野|らむち|なちょ|ういにゃん|あーちゃん|マーブル|わらぶい|ハムさん|ゆきお|rain/i;
+
 describe("BUILTIN_PHRASES", () => {
   const entries = SLOTS.flatMap((slot) => BUILTIN_PHRASES[slot].map((phrase) => ({ slot, phrase })));
   const text = (r: ReturnType<typeof review>) =>
@@ -192,20 +199,15 @@ describe("BUILTIN_PHRASES", () => {
   });
 
   it("死や暴力を願う言葉は入れていない(「バカ」「カス」のような暴言は、遊ぶ本人が望んだので入れている)", () => {
-    // 「死ぬな」「殺されてた」「殴り返す」はゲームの中の話なので引っかけない
-    const banned = /しね|死ね|死んで|死んどけ|しんどけ|4ね|〇ね|56[しせ]|ぶん殴|殺す|殺せ/;
-    for (const { phrase } of entries) expect(phrase.text, phrase.text).not.toMatch(banned);
+    for (const { phrase } of entries) expect(phrase.text, phrase.text).not.toMatch(BANNED_VIOLENCE);
   });
 
   it("容姿・体型・性別に触れる言葉は入れていない", () => {
-    const banned = /女|男|ババア|ジジイ|デブ|ブタ|太っ|体型|体脂肪|メガネ|ブス|生え際|顔キモ|ちんちん/;
-    for (const { phrase } of entries) expect(phrase.text, phrase.text).not.toMatch(banned);
+    for (const { phrase } of entries) expect(phrase.text, phrase.text).not.toMatch(BANNED_BODY);
   });
 
   it("ほかの実在の人の名前は入れていない(名指しの発言は {name} に置きかえる)", () => {
-    // シートに出てくる、まわりの配信者・選手の呼び名
-    const names = /zerost|ぜろすと|ゼロスト|たかや|たかス|じゃす|ジャス|しゃる|スタンミ|スタは|忍者|にんにん|なぎさっち|とおこ|葛葉|くずは|evi|えび|みっちー|ヘンディー|ローレン|UG|あかりん|メイカ|めいか|ボドカ|おぼ|象先輩|釈迦|shaka|k4sen|かせん|アルファ|INO|りーちゃん|ひなーの|ひなの|うるーか|よむ|よいち|day1|ta1yo|清川|増永|増アカ|代表|faker|zeus|菅原|村瀬|星野|らむち|なちょ|ういにゃん|あーちゃん|マーブル|わらぶい|ハムさん|ゆきお|rain/i;
-    for (const { phrase } of entries) expect(phrase.text, phrase.text).not.toMatch(names);
+    for (const { phrase } of entries) expect(phrase.text, phrase.text).not.toMatch(BANNED_NAMES);
   });
 
   it("加工したものは、出典に何をしたか書いてある", () => {
@@ -261,6 +263,68 @@ describe("BUILTIN_PHRASES", () => {
       const parts = added(s.id, 0);
       // 付かないのは、弱みのない人への軽い指摘くらい
       expect(parts.filter((t) => t !== "").length).toBeGreaterThanOrEqual(parts.length - 1);
+    }
+  });
+});
+
+describe("IMAGINED_PHRASES(言いそうな台詞として作ったもの)", () => {
+  const entries = SLOTS.flatMap((slot) => IMAGINED_PHRASES[slot].map((phrase) => ({ slot, phrase })));
+  const realTexts = new Set(SLOTS.flatMap((slot) => BUILTIN_PHRASES[slot].map((p) => p.text)));
+
+  it("読み込みと同じ決まりを守り、すべてに「作ったもの」の印と出典の断り書きがある", () => {
+    expect(parsePhrases(IMAGINED_PHRASES)).toEqual(IMAGINED_PHRASES);
+    for (const { phrase } of entries) {
+      expect(phrase.imagined, phrase.text).toBe(true);
+      expect(phrase.source, phrase.text).toMatch(/^創作/);
+    }
+  });
+
+  it("実際の発言の表には、作った台詞の印が付いたものが無い", () => {
+    for (const slot of SLOTS) for (const phrase of BUILTIN_PHRASES[slot]) expect(phrase.imagined, phrase.text).toBeUndefined();
+  });
+
+  it("実際の発言と同じ文は入れていない(どちらなのか分からなくなるため)", () => {
+    for (const { phrase } of entries) expect(realTexts.has(phrase.text), phrase.text).toBe(false);
+  });
+
+  it("実際の発言と同じ決まりを守る(死や暴力・容姿や性別・実在の人の名前を入れない)", () => {
+    for (const { phrase } of entries) {
+      expect(phrase.text, phrase.text).not.toMatch(BANNED_VIOLENCE);
+      expect(phrase.text, phrase.text).not.toMatch(BANNED_BODY);
+      expect(phrase.text, phrase.text).not.toMatch(BANNED_NAMES);
+    }
+  });
+
+  it("どの話題にも、合わせられる口ぐせが少なくとも1つある(実際の発言と合わせて)", () => {
+    const covered = new Set(
+      [BUILTIN_PHRASES, IMAGINED_PHRASES].flatMap((book) => SLOTS.flatMap((slot) => book[slot].map((p) => p.topic))),
+    );
+    for (const topic of PHRASE_TOPICS) expect(covered.has(topic), topic).toBe(true);
+  });
+
+  it("作った台詞は、実際の発言より出にくい", () => {
+    const mixed = book({ roast: [{ text: "実際、" }, { text: "創作、", imagined: true }] });
+    let real = 0;
+    for (let seed = 0; seed < 300; seed++) if (makeSpeaker(mixed, makeRng(seed), "テスト")("roast", "x") === "実際、x") real += 1;
+    // 重みは 1 : 0.5 なので、実際の発言が3分の2くらい
+    expect(real).toBeGreaterThan(170);
+    expect(real).toBeLessThan(230);
+  });
+
+  it("混ぜても、同じ口ぐせを1回の評価で2度使わない", () => {
+    const merged = mergePhrases(BUILTIN_PHRASES, IMAGINED_PHRASES);
+    for (const s of SAMPLE_PLAYERS) {
+      for (let variant = 0; variant < 6; variant++) {
+        const plain = review(s.id, undefined, variant);
+        const spoken = review(s.id, merged, variant);
+        const pairs = [
+          [plain.opening, spoken.opening], [plain.verdict, spoken.verdict], [plain.homework, spoken.homework],
+          ...plain.replies.map((r, i) => [r.text, spoken.replies[i].text]),
+          ...plain.roasts.map((r, i) => [r.text, spoken.roasts[i].text]),
+        ];
+        const used = pairs.map(([a, b]) => b.replace(a, "")).filter((t) => t !== "");
+        expect(new Set(used).size, used.join(" / ")).toBe(used.length);
+      }
     }
   });
 });

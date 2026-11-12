@@ -333,7 +333,8 @@ export function analyze(player: PlayerData, options: AnalyzeOptions = {}): Analy
 
   strong(
     "lanewin",
-    lane.games >= 6 && ((lane.wonRate ?? 0) >= 0.62 || (gold15 ?? 0) >= 500),
+    // 文では「勝った試合の割合」と「15分のゴールド差」のどちらも自慢に使うので、片方が悪いときは強みにしない
+    lane.games >= 6 && (gold15 ?? 1) > 0 && (lane.wonRate ?? 0.5) >= 0.5 && ((lane.wonRate ?? 0) >= 0.62 || (gold15 ?? 0) >= 500),
     0.35 + Math.max((lane.wonRate ?? 0.5) - 0.5, (gold15 ?? 0) / 2500),
   );
   strong("comeback", detail.behind15.games >= 3 && detail.behind15.wins >= 2 && winRateOf(detail.behind15) >= 0.5, 0.45);

@@ -39,6 +39,8 @@ export interface Phrase {
   topic?: PhraseTopic;
   /** どこで確かめた言い回しか(画面には出さない覚え書き) */
   source?: string;
+  /** true なら、実際の発言ではなく「言いそうな台詞」として作ったもの。実際の発言より出にくくする */
+  imagined?: boolean;
 }
 
 export type PhraseBook = Record<Slot, Phrase[]>;
@@ -68,7 +70,7 @@ export const PHRASE_TOPICS = Object.keys(TOPIC_NAMES) as PhraseTopic[];
 function parsePhrase(item: unknown): Phrase | null {
   const raw = typeof item === "string" ? { text: item } : item;
   if (typeof raw !== "object" || raw === null) return null;
-  const { text, after, role, topic, source } = raw as Record<string, unknown>;
+  const { text, after, role, topic, source, imagined } = raw as Record<string, unknown>;
   if (typeof text !== "string") return null;
   const trimmed = text.trim();
   if (trimmed === "" || trimmed.length > MAX_LENGTH) return null;
@@ -84,6 +86,7 @@ function parsePhrase(item: unknown): Phrase | null {
     phrase.topic = topic as PhraseTopic;
   }
   if (typeof source === "string" && source.trim() !== "") phrase.source = source.trim().slice(0, MAX_SOURCE_LENGTH);
+  if (imagined === true) phrase.imagined = true;
   return phrase;
 }
 
@@ -152,7 +155,15 @@ export function makeSpeaker(
     const onTopic = fresh.filter((p) => p.topic !== undefined);
     const limited = fresh.filter((p) => p.role !== undefined);
     const pool = onTopic.length > 0 ? onTopic : limited.length > 0 ? limited : fresh;
-    const phrase = pool[Math.floor(rng() * pool.length)];
+    // 作った台詞は、実際の発言の半分の出やすさにする(実際の発言があるうちは、そちらが主役)
+    const weightOf = (p: Phrase): number => (p.imagined ? 0.5 : 1);
+    let roll = rng() * pool.reduce((total, p) => total + weightOf(p), 0);
+    let at = 0;
+    while (at < pool.length - 1 && roll >= weightOf(pool[at])) {
+      roll -= weightOf(pool[at]);
+      at += 1;
+    }
+    const phrase = pool[at];
     used.add(phrase.text);
     const text = phrase.text.replaceAll("{name}", name);
     if (phrase.after) return `${line}${CLOSED.test(text) || TRAILING.test(text) ? text : `${text}。`}`;

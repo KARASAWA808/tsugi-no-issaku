@@ -183,6 +183,9 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .homework { grid-column: 1 / -1; border-top: 1px dashed var(--line); padding-top: 12px; }
 .homework dt { font-size: .8rem; font-weight: 700; color: var(--ok); }
 .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.toggle { display: flex; gap: 10px; align-items: flex-start; font-size: .9rem; font-weight: 700; cursor: pointer; }
+.toggle input { width: 20px; height: 20px; margin: 3px 0 0; accent-color: var(--critic); flex: none; }
+.toggle small { display: block; font-weight: 500; color: var(--muted); font-size: .8rem; }
 
 /* 評価は上から順に出す */
 .reveal > * { animation: rise .35s ease both; animation-delay: calc(var(--i, 0) * .22s); }

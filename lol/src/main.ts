@@ -3,6 +3,7 @@
 import "./style.css";
 import { type Analysis, type Axis, analyze } from "./analyze";
 import { type Split, winRateOf } from "./detail";
+import { IMAGINED_PHRASES } from "./imagined-phrases";
 import { type Intro, buildIntro } from "./intro";
 import { CRITIC_NAME, ROLE_LABELS, f1, pct, rankLabel } from "./labels";
 import { BUILTIN_PHRASES, type PhraseBook, emptyBook, mergePhrases, parsePhrases } from "./phrases";
@@ -26,6 +27,7 @@ const PLATFORM_LABELS: readonly (readonly [string, string])[] = [
   ["tr1", "トルコ"],
 ];
 const STORAGE_KEY = "karakuchi-dojo:last";
+const IMAGINED_KEY = "karakuchi-dojo:imagined";
 
 type Child = Node | string | null | false;
 
@@ -137,6 +139,23 @@ async function loadLocal(): Promise<void> {
   ]);
   Object.assign(local, { avatar, logo, phrases });
   if (view) render();
+}
+
+// --- 「言いそうな台詞」(作った口ぐせ)も混ぜるか。ブラウザに覚えておく。覚えられなければ、開くたびにオン ---
+let useImagined = true;
+try {
+  useImagined = localStorage.getItem(IMAGINED_KEY) !== "off";
+} catch {
+  // 何もしない
+}
+
+function setUseImagined(on: boolean): void {
+  useImagined = on;
+  try {
+    localStorage.setItem(IMAGINED_KEY, on ? "on" : "off");
+  } catch {
+    // 何もしない
+  }
 }
 
 // --- 前回の入力を覚えておく(localStorage が使えなければ覚えないだけ) ---
@@ -505,12 +524,26 @@ function reviewAct(current: View, intro: Intro, review: Review): HTMLElement {
     riotIdInput.focus();
   });
 
+  const imagined = el("input", { type: "checkbox", id: "useImagined" });
+  imagined.checked = useImagined;
+  imagined.addEventListener("change", () => {
+    setUseImagined(imagined.checked);
+    render();
+    document.getElementById("useImagined")?.focus();
+  });
+
   return el(
     "section",
     { class: "act", id: "review", "aria-label": "辛口評価" },
     actHead("③", `${CRITIC_NAME}の辛口評価`, "非公式のパロディ", local.logo),
     talk,
     el("div", { class: "actions" }, again, other),
+    el(
+      "label",
+      { class: "toggle", for: "useImagined" },
+      imagined,
+      el("span", {}, "言いそうな台詞も混ぜる", el("small", {}, "オフにすると、口ぐせは実際の発言として記録のあるものだけになります")),
+    ),
   );
 }
 
@@ -531,7 +564,8 @@ function render(): void {
     result.replaceChildren();
     return;
   }
-  const options = { variant: view.variant, champName, phrases: mergePhrases(BUILTIN_PHRASES, local.phrases) };
+  const phrases = useImagined ? mergePhrases(BUILTIN_PHRASES, local.phrases, IMAGINED_PHRASES) : mergePhrases(BUILTIN_PHRASES, local.phrases);
+  const options = { variant: view.variant, champName, phrases };
   const intro = buildIntro(view.player, view.analysis, options);
   const sections = [profileAct(view), introAct(view, intro)];
   if (view.revealed) sections.push(reviewAct(view, intro, buildReview(view.player, view.analysis, intro, options)));
