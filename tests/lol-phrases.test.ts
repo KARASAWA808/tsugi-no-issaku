@@ -10,7 +10,8 @@ const book = (over: Partial<PhraseBook>): PhraseBook => ({ ...emptyBook(), ...ov
 
 function review(id: string, phrases?: PhraseBook, variant = 0) {
   const player = samplePlayer(id)!;
-  const analysis = analyze(player)!;
+  // 時間帯の解析が動かす環境の時差で変わらないよう、日本時間で固定する
+  const analysis = analyze(player, { utcOffsetMinutes: 540 })!;
   const intro = buildIntro(player, analysis, { variant });
   return buildReview(player, analysis, intro, { variant, phrases });
 }

@@ -5,7 +5,8 @@ import { match, player } from "./lol-helpers";
 
 
 
-const sample = (id: string) => analyze(samplePlayer(id)!)!;
+// 時間帯の解析が動かす環境の時差で変わらないよう、日本時間で固定する
+const sample = (id: string) => analyze(samplePlayer(id)!, { utcOffsetMinutes: 540 })!;
 const ids = (traits: readonly { id: string }[]) => traits.map((t) => t.id);
 
 describe("scale", () => {

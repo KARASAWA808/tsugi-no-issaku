@@ -9,7 +9,8 @@ import { match } from "./lol-helpers";
 
 
 function build(player: PlayerData, variant = 0, champName?: (id: string) => string) {
-  const analysis = analyze(player)!;
+  // 時間帯の解析が動かす環境の時差で変わらないよう、日本時間で固定する
+  const analysis = analyze(player, { utcOffsetMinutes: 540 })!;
   const intro = buildIntro(player, analysis, { variant, champName });
   const review = buildReview(player, analysis, intro, { variant, champName });
   return { analysis, intro, review };
