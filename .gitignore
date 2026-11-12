@@ -7,3 +7,5 @@ dist
 lol/public/local/*
 !lol/public/local/README.md
 !lol/public/local/phrases.example.json
+# 確認用に一時的に置くテスト(名前が _ で始まるもの)。コミットしない
+tests/_*
