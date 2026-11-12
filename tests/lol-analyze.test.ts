@@ -1,22 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { analyze, gradeOf, scale } from "../lol/src/analyze";
 import { SAMPLE_PLAYERS, samplePlayer } from "../lol/src/sample";
-import type { MatchStat, PlayerData } from "../lol/src/types";
+import { match, player } from "./lol-helpers";
 
-/** ごくふつうのミッドの1試合。変えたいところだけ上書きする */
-function match(over: Partial<MatchStat> = {}): MatchStat {
-  return {
-    matchId: "T_1", queueId: 420, gameStart: 1_700_000_000_000, durationSec: 1800, win: true, role: "MIDDLE", champion: "Ahri",
-    kills: 6, deaths: 5, assists: 7, cs: 190, gold: 11500, damage: 22000, damageTaken: 18000,
-    visionScore: 27, wardsPlaced: 10, wardsKilled: 3, controlWards: 2, teamKills: 25, teamDamage: 90000,
-    firstBlood: false, soloKills: 1, csAt10: 64, objectives: 2, turretTakedowns: 2, largestMultiKill: 2, timeDeadSec: 180,
-    ...over,
-  };
-}
 
-function player(matches: MatchStat[]): PlayerData {
-  return { gameName: "テスト", tagLine: "TEST", level: 100, rank: null, matches };
-}
 
 const sample = (id: string) => analyze(samplePlayer(id)!)!;
 const ids = (traits: readonly { id: string }[]) => traits.map((t) => t.id);

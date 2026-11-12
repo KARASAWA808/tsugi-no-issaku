@@ -1,5 +1,9 @@
 // 試合の成績から、6つの軸の点数と「強み」「弱み」を出す。DOMには触れない。
+import { BENCH, scale } from "./bench";
+import { type Detail, computeDetail, winRateOf } from "./detail";
 import type { MatchStat, PlayerData, Role } from "./types";
+
+export { scale };
 
 export type AxisKey = "laning" | "fighting" | "vision" | "survival" | "objective" | "consistency";
 
@@ -12,11 +16,16 @@ export interface Axis {
 
 export type StrengthId =
   | "kda" | "cs" | "vision" | "teamfight" | "damage" | "solokill" | "survive"
-  | "objective" | "onetrick" | "winrate" | "firstblood" | "pool" | "multikill";
+  | "objective" | "onetrick" | "winrate" | "firstblood" | "pool" | "multikill"
+  // ここから下は、くわしい解析から出る強み
+  | "lanewin" | "comeback" | "lategame" | "plates" | "healer" | "cc" | "dodger" | "form" | "steal";
 
 export type WeaknessId =
   | "feeder" | "grayscreen" | "lowcs" | "loselane" | "blind" | "nopink" | "afk" | "lowdamage"
-  | "kdaplayer" | "coinflip" | "tourist" | "losing" | "nomad" | "noobjective";
+  | "kdaplayer" | "coinflip" | "tourist" | "losing" | "nomad" | "noobjective"
+  // ここから下は、くわしい解析から出る弱み
+  | "behind15" | "earlydeath" | "deepdeath" | "solodeath" | "thrower" | "tilt" | "marathon"
+  | "nightloss" | "ff" | "pinger" | "slump" | "sidegap" | "latelose" | "badchamp";
 
 export interface Trait<T extends string> {
   id: T;
@@ -82,44 +91,18 @@ export interface Analysis {
   disasterRate: number;
   longestLosingStreak: number;
   largestMultiKill: number;
+  /** 条件別の勝率、対面との差、デスの内訳など */
+  detail: Detail;
+  /** 4試合以上使って勝率が25%以下のチャンピオン(いちばん試合数の多いもの)。なければ null */
+  badChampion: ChampionSummary | null;
+}
+
+export interface AnalyzeOptions {
+  /** 始めた時刻を見るときの時差(分)。省くと、動かしている環境の時差 */
+  utcOffsetMinutes?: number;
 }
 
 export type Grade = "S" | "A" | "B" | "C" | "D";
-
-/** [悪い, 良い] の組。悪い側で0点、良い側で100点 */
-type Range = readonly [number, number];
-
-interface Bench {
-  cs: Range;
-  cs10: Range;
-  vision: Range;
-  pinks: Range;
-  kp: Range;
-  dmg: Range;
-  solo: Range;
-  obj: Range;
-}
-
-// ロールごとの目安。厳密な統計ではなく、「ふつうなら50点前後」になるように置いた値
-const LANER: Bench = {
-  cs: [4.5, 8], cs10: [45, 82], vision: [0.5, 1.3], pinks: [0.5, 3],
-  kp: [0.4, 0.64], dmg: [0.18, 0.31], solo: [0.2, 1.8], obj: [0.8, 3],
-};
-const BENCH: Record<Role, Bench> = {
-  TOP: { ...LANER, vision: [0.5, 1.2], kp: [0.32, 0.58], dmg: [0.16, 0.29], obj: [0.6, 2.6] },
-  JUNGLE: {
-    cs: [3.8, 6.6], cs10: [40, 68], vision: [0.7, 1.5], pinks: [1, 4],
-    kp: [0.45, 0.7], dmg: [0.12, 0.24], solo: [0.1, 1.2], obj: [1.5, 4.5],
-  },
-  MIDDLE: LANER,
-  BOTTOM: { ...LANER, cs: [5, 8.5], cs10: [48, 82], vision: [0.5, 1.2], dmg: [0.19, 0.33], solo: [0.05, 0.9], obj: [0.8, 3.2] },
-  // サポートはCSを見ない(cs / cs10 は使わない)
-  UTILITY: {
-    cs: [0, 1], cs10: [0, 1], vision: [1.5, 3], pinks: [2, 6],
-    kp: [0.45, 0.7], dmg: [0.05, 0.15], solo: [0, 0.5], obj: [0.8, 3],
-  },
-  UNKNOWN: LANER,
-};
 
 export const AXIS_LABELS: Record<AxisKey, string> = {
   laning: "レーン戦",
@@ -129,12 +112,6 @@ export const AXIS_LABELS: Record<AxisKey, string> = {
   objective: "オブジェクト",
   consistency: "安定感",
 };
-
-/** bad で0、good で100 になるように直線で点数にする。bad > good(小さいほど良い項目)でも使える */
-export function scale(value: number, [bad, good]: Range): number {
-  const t = (value - bad) / (good - bad);
-  return Math.round(Math.max(0, Math.min(1, t)) * 100);
-}
 
 const sum = (list: readonly MatchStat[], f: (m: MatchStat) => number): number =>
   list.reduce((total, m) => total + f(m), 0);
@@ -233,7 +210,7 @@ const above = (score: number, line: number): number => Math.max(0, (score - line
 const below = (score: number, line: number): number => Math.max(0, (line - score) / line);
 
 /** 試合が1つもなければ null */
-export function analyze(player: PlayerData): Analysis | null {
+export function analyze(player: PlayerData, options: AnalyzeOptions = {}): Analysis | null {
   const matches = player.matches;
   if (matches.length === 0) return null;
 
@@ -261,6 +238,9 @@ export function analyze(player: PlayerData): Analysis | null {
   const champions = championsOf(matches);
   const disasterRate = matches.filter(isDisaster).length / games;
   const largestMultiKill = Math.max(...matches.map((m) => m.largestMultiKill));
+  const detail = computeDetail(matches, onRole, mainRole, options.utcOffsetMinutes ?? -new Date().getTimezoneOffset());
+  const badChampion =
+    champions.find((c) => c.games >= 4 && c.wins / c.games <= 0.25 && winRate - c.wins / c.games >= 0.1) ?? null;
 
   const s = {
     cs: scale(avg.csPerMin, bench.cs),
@@ -343,6 +323,43 @@ export function analyze(player: PlayerData): Analysis | null {
   weak("nomad", mainRole !== "UNKNOWN" && roleShare < 0.45, 0.4);
   weak("noobjective", axisScores.objective <= 30, below(axisScores.objective, 30) + 0.15);
 
+  // --- くわしい解析から出る強み・弱み ---
+  const { lane, deaths } = detail;
+  const laner = mainRole === "TOP" || mainRole === "MIDDLE" || mainRole === "BOTTOM";
+  const gold15 = lane.goldDiff15;
+  const losses = games - wins;
+  const recentRate = winRateOf(detail.recent);
+  const earlierRate = winRateOf(detail.earlier);
+
+  strong(
+    "lanewin",
+    lane.games >= 6 && ((lane.wonRate ?? 0) >= 0.62 || (gold15 ?? 0) >= 500),
+    0.35 + Math.max((lane.wonRate ?? 0.5) - 0.5, (gold15 ?? 0) / 2500),
+  );
+  strong("comeback", detail.behind15.games >= 3 && detail.behind15.wins >= 2 && winRateOf(detail.behind15) >= 0.5, 0.45);
+  strong("lategame", detail.length.long.games >= 4 && winRateOf(detail.length.long) >= 0.7, 0.35);
+  strong("plates", laner && detail.plates >= 2, 0.3 + (detail.plates - 2) * 0.15);
+  strong("healer", support && detail.healShieldPerMin >= 250, 0.3 + (detail.healShieldPerMin - 250) / 500);
+  strong("cc", detail.ccSec >= 35, 0.25 + (detail.ccSec - 35) / 80);
+  strong("dodger", detail.dodged >= 55, 0.2 + (detail.dodged - 55) / 100);
+  strong("form", games >= 10 && detail.recent.wins >= 4 && recentRate > earlierRate, 0.4 + (recentRate - earlierRate) / 2);
+  strong("steal", detail.steals >= 1, 0.3 + detail.steals * 0.1);
+
+  weak("behind15", lane.games >= 6 && gold15 !== null && gold15 <= -500, 0.35 + -(gold15 ?? 0) / 2500);
+  weak("earlydeath", deaths !== null && deaths.per10 >= 1.5, 0.35 + ((deaths?.per10 ?? 0) - 1.5) / 3);
+  weak("deepdeath", deaths !== null && deaths.counted >= 20 && deaths.deep >= 0.45, 0.3 + ((deaths?.deep ?? 0) - 0.45));
+  weak("solodeath", deaths !== null && deaths.counted >= 20 && deaths.solo >= 0.4, 0.3 + ((deaths?.solo ?? 0) - 0.4));
+  weak("thrower", detail.ahead15.games >= 3 && winRateOf(detail.ahead15) <= 0.5, 0.45 + (0.5 - winRateOf(detail.ahead15)) / 2);
+  weak("tilt", detail.afterLoss.games >= 4 && winRateOf(detail.afterLoss) <= 0.3, 0.5 + (0.3 - winRateOf(detail.afterLoss)));
+  weak("marathon", detail.longestSession >= 6, 0.25 + (detail.longestSession - 6) * 0.08);
+  weak("nightloss", detail.time.night.games >= 4 && winRateOf(detail.time.night) <= 0.35, 0.4);
+  weak("ff", detail.surrenders >= 3 && detail.surrenders / Math.max(1, losses) >= 0.4, 0.35);
+  weak("pinger", detail.missingPings >= 8, 0.3 + (detail.missingPings - 8) / 30);
+  weak("slump", games >= 10 && detail.recent.wins <= 1 && earlierRate - recentRate >= 0.2, 0.45 + (earlierRate - recentRate) / 2);
+  weak("sidegap", detail.weakSide !== null, 0.3);
+  weak("latelose", detail.length.long.games >= 4 && winRateOf(detail.length.long) <= 0.3, 0.35);
+  weak("badchamp", badChampion !== null, 0.4);
+
   strengths.sort((a, b) => b.strength - a.strength);
   weaknesses.sort((a, b) => b.strength - a.strength);
 
@@ -366,6 +383,8 @@ export function analyze(player: PlayerData): Analysis | null {
     disasterRate,
     longestLosingStreak: longestLosingStreak(matches),
     largestMultiKill,
+    detail,
+    badChampion,
   };
 }
 

@@ -42,6 +42,59 @@ export interface MatchStat {
   largestMultiKill: number;
   /** 死んで灰色の画面を見ていた秒数 */
   timeDeadSec: number;
+
+  // --- ここから下は、くわしい解析用 ---
+  /** 青側(teamId 100)か赤側(200)か */
+  side: "blue" | "red";
+  /** 試合終了時のチャンピオンレベル */
+  level: number;
+  /** 対面(相手チームの同じロール)との、試合終了時の差(自分 − 対面)。対面が決まらない試合は null */
+  csDiff: number | null;
+  goldDiff: number | null;
+  damageDiff: number | null;
+  /** レーン戦の終わり(約14分)でゴールドと経験値が対面より上だったか。分からなければ null */
+  laneWon: boolean | null;
+  /** 取ったタワープレートの数 */
+  turretPlates: number;
+  /** ドラゴン・バロンなどオブジェクトへのダメージ */
+  objectiveDamage: number;
+  /** 味方チームが取ったドラゴン・バロン・ヘラルドの合計(objectives と比べて関与の割合を出す) */
+  teamObjectives: number;
+  /** 味方への回復とシールドの合計 */
+  healShield: number;
+  /** 相手に行動妨害(CC)をかけていた秒数 */
+  ccSec: number;
+  /** 避けたスキルショットの数 */
+  skillshotsDodged: number;
+  /** 相手から奪ったドラゴン・バロンなどの数 */
+  epicSteals: number;
+  /** 出したピンの合計 */
+  pings: number;
+  /** そのうち「?」(敵が消えた)ピンの数 */
+  missingPings: number;
+  /** 降参で終わった負け試合か */
+  surrendered: boolean;
+  /** いちばん長く生きていた秒数 */
+  longestLivingSec: number;
+  /** タイムライン(1分ごとの記録と出来事)から取った値。取れなかった試合は null */
+  timeline: MatchTimeline | null;
+}
+
+/** 1試合のタイムラインから、本人のぶんだけ抜き出したもの */
+export interface MatchTimeline {
+  /** 10分・15分時点の、対面とのゴールド差(自分 − 対面)。試合がそこまで続かなかった、対面が決まらないときは null */
+  goldDiff10: number | null;
+  goldDiff15: number | null;
+  /** 10分時点の、対面とのCS差 */
+  csDiff10: number | null;
+  /** 10分までのキル+アシスト */
+  takedowns10: number;
+  /** 死んだ時刻(分。小数1桁)。時刻順 */
+  deathMinutes: number[];
+  /** 相手1人にやられたデス(アシストなし)の数 */
+  soloDeaths: number;
+  /** 相手側の陣地で死んだデスの数 */
+  deepDeaths: number;
 }
 
 export interface RankInfo {

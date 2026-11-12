@@ -4,17 +4,9 @@ import { CLAIM_COUNT, buildIntro } from "../lol/src/intro";
 import { CRITIC_CALL, hashString, makeRng, rankLabel } from "../lol/src/labels";
 import { buildReview } from "../lol/src/review";
 import { SAMPLE_PLAYERS, samplePlayer } from "../lol/src/sample";
-import type { MatchStat, PlayerData } from "../lol/src/types";
+import type { PlayerData } from "../lol/src/types";
+import { match } from "./lol-helpers";
 
-function match(over: Partial<MatchStat> = {}): MatchStat {
-  return {
-    matchId: "T_1", queueId: 420, gameStart: 1_700_000_000_000, durationSec: 1800, win: true, role: "MIDDLE", champion: "Ahri",
-    kills: 6, deaths: 5, assists: 7, cs: 190, gold: 11500, damage: 22000, damageTaken: 18000,
-    visionScore: 27, wardsPlaced: 10, wardsKilled: 3, controlWards: 2, teamKills: 25, teamDamage: 90000,
-    firstBlood: false, soloKills: 1, csAt10: 64, objectives: 2, turretTakedowns: 2, largestMultiKill: 2, timeDeadSec: 180,
-    ...over,
-  };
-}
 
 function build(player: PlayerData, variant = 0, champName?: (id: string) => string) {
   const analysis = analyze(player)!;

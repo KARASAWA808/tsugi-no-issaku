@@ -2,12 +2,13 @@
 // 名前などの外から来た文字は textContent でだけ入れる(innerHTML は使わない)。
 import "./style.css";
 import { type Analysis, type Axis, analyze } from "./analyze";
+import { type Split, winRateOf } from "./detail";
 import { type Intro, buildIntro } from "./intro";
 import { CRITIC_NAME, ROLE_LABELS, f1, pct, rankLabel } from "./labels";
 import { BUILTIN_PHRASES, type PhraseBook, emptyBook, mergePhrases, parsePhrases } from "./phrases";
 import { type Review, buildReview } from "./review";
 import { SAMPLE_PLAYERS, samplePlayer } from "./sample";
-import type { ApiError, PlayerData } from "./types";
+import type { ApiError, MatchStat, PlayerData } from "./types";
 
 const PLATFORM_LABELS: readonly (readonly [string, string])[] = [
   ["jp1", "日本"],
@@ -218,7 +219,8 @@ function actHead(num: string, title: string, tag = "", logo: string | null = nul
   );
 }
 
-function profileAct({ player, analysis: a }: View): HTMLElement {
+function profileAct(view: View): HTMLElement {
+  const { player, analysis: a } = view;
   const support = a.mainRole === "UTILITY";
   return el(
     "section",
@@ -281,7 +283,143 @@ function profileAct({ player, analysis: a }: View): HTMLElement {
         ),
       ),
     ),
+    detailBlock(view),
   );
+}
+
+// --- ①のつづき: くわしい解析 ---
+const signed = (n: number | null, digits = 0): string => {
+  if (n === null) return "—";
+  const rounded = digits === 0 ? Math.round(n) : Number(n.toFixed(digits));
+  return `${rounded > 0 ? "+" : rounded < 0 ? "−" : "±"}${Math.abs(rounded).toLocaleString("ja-JP")}`;
+};
+
+/** 条件別の勝率の1行。試合のない条件は出さない */
+function splitRow(label: string, split: Split): HTMLElement | null {
+  if (split.games === 0) return null;
+  const rate = winRateOf(split);
+  const fill = el("i");
+  fill.style.width = `${Math.round(rate * 100)}%`;
+  return el(
+    "li",
+    { class: rate < 0.4 ? "split low" : "split" },
+    el("span", { class: "split-label" }, label),
+    el("span", { class: "split-games" }, `${split.games}試合`),
+    el("span", { class: "bar", "aria-hidden": "true" }, fill),
+    el("span", { class: "score" }, `${pct(rate)}%`),
+  );
+}
+
+function splitGroup(title: string, rows: (HTMLElement | null)[]): HTMLElement | null {
+  const shown = rows.filter((row): row is HTMLElement => row !== null);
+  if (shown.length === 0) return null;
+  return el("div", { class: "split-group" }, el("h4", {}, title), el("ul", { class: "splits" }, ...shown));
+}
+
+function matchRow(m: MatchStat, score: number): HTMLElement {
+  const minutes = Math.max(1, m.durationSec / 60);
+  const fill = el("i");
+  fill.style.width = `${score}%`;
+  return el(
+    "tr",
+    { class: m.win ? "won" : "lost" },
+    el("td", { class: "result" }, m.win ? "勝" : "負"),
+    el("th", { scope: "row" }, champName(m.champion), el("small", {}, ROLE_LABELS[m.role])),
+    el("td", { class: "num" }, `${m.kills}/${m.deaths}/${m.assists}`),
+    el("td", { class: "num" }, m.role === "UTILITY" ? "—" : f1(m.cs / minutes)),
+    el("td", { class: "num" }, `${Math.round(minutes)}分`),
+    el("td", { class: "match-score" }, el("span", { class: score < 40 ? "bar low" : "bar", "aria-hidden": "true" }, fill), el("span", { class: "score" }, String(score))),
+  );
+}
+
+function detailBlock({ player, analysis: a }: View): HTMLElement {
+  const d = a.detail;
+  const support = a.mainRole === "UTILITY";
+  const block = el("div", { class: "detail" }, el("h3", {}, "くわしい解析"));
+
+  // レーン戦: 対面(相手チームの同じロール)との差
+  if (d.lane.games > 0) {
+    block.append(
+      el("h4", {}, "レーン戦(対面との差)"),
+      el(
+        "dl",
+        { class: "tiles" },
+        d.lane.goldDiff15 !== null && tile("15分のゴールド差", signed(d.lane.goldDiff15)),
+        d.lane.goldDiff10 !== null && tile("10分のゴールド差", signed(d.lane.goldDiff10)),
+        d.lane.csDiff10 !== null && !support && tile("10分のCS差", signed(d.lane.csDiff10, 1)),
+        d.lane.wonRate !== null && tile("レーンで差をつけた試合", `${pct(d.lane.wonRate)}%`),
+        d.lane.takedowns10 !== null && tile("10分までのキル関与", f1(d.lane.takedowns10), "回/試合"),
+        d.lane.goldDiff !== null && tile("試合終了時のゴールド差", signed(d.lane.goldDiff)),
+        d.plates > 0 && tile("タワープレート", f1(d.plates), "枚/試合"),
+      ),
+    );
+  }
+
+  // デスの内訳: いつ・どこで・だれに
+  if (d.deaths && d.deaths.counted > 0) {
+    const phases: [string, number, string][] = [
+      ["〜10分", d.deaths.early, "early"],
+      ["10〜25分", d.deaths.mid, "mid"],
+      ["25分〜", d.deaths.late, "late"],
+    ];
+    const bar = el("div", { class: "phase-bar", role: "img", "aria-label": phases.map(([label, share]) => `${label} ${pct(share)}%`).join("、") });
+    for (const [label, share, name] of phases) {
+      if (share <= 0) continue;
+      const part = el("span", { class: `phase ${name}` }, share >= 0.12 ? `${label} ${pct(share)}%` : "");
+      part.style.flexGrow = String(Math.max(0.02, share));
+      bar.append(part);
+    }
+    block.append(
+      el("h4", {}, `デスの内訳(時刻の分かった${d.deaths.counted}デス)`),
+      bar,
+      el(
+        "dl",
+        { class: "tiles" },
+        tile("10分までのデス", f1(d.deaths.per10), "回/試合"),
+        tile("相手の陣地でのデス", `${pct(d.deaths.deep)}%`),
+        tile("1対1でやられたデス", `${pct(d.deaths.solo)}%`),
+      ),
+    );
+  } else {
+    block.append(el("p", { class: "note" }, "デスの時刻と場所は、この試合では取れませんでした。"));
+  }
+
+  // 条件別の勝率
+  const groups = [
+    splitGroup("サイド", [splitRow("青側", d.side.blue), splitRow("赤側", d.side.red)]),
+    splitGroup("試合の長さ", [splitRow("25分未満", d.length.short), splitRow("25〜35分", d.length.mid), splitRow("35分以上", d.length.long)]),
+    splitGroup("始めた時刻", [splitRow("朝(5〜11時)", d.time.morning), splitRow("昼(11〜17時)", d.time.day), splitRow("夜(17〜24時)", d.time.evening), splitRow("深夜(0〜5時)", d.time.night)]),
+    splitGroup("調子", [splitRow("直近5試合", d.recent), splitRow("それより前", d.earlier)]),
+    splitGroup("連戦", [splitRow("負けた直後", d.afterLoss), splitRow("勝った直後", d.afterWin)]),
+    splitGroup("15分の状況", [splitRow("リード", d.ahead15), splitRow("ビハインド", d.behind15)]),
+    splitGroup("種類", [splitRow("ランク", d.queue.ranked), splitRow("ノーマル", d.queue.normal)]),
+  ].filter((group): group is HTMLElement => group !== null);
+  block.append(el("h4", {}, "条件別の勝率"), el("div", { class: "split-grid" }, ...groups));
+
+  block.append(
+    el("h4", {}, "そのほか"),
+    el(
+      "dl",
+      { class: "tiles" },
+      tile("最長の連戦", String(d.longestSession), "試合"),
+      tile("降参で終わった負け", String(d.surrenders), "試合"),
+      tile("「?」ピン", f1(d.missingPings), "回/試合"),
+      tile("オブジェクト関与", `${pct(d.objectiveShare)}%`),
+      tile("CCをかけた時間", String(Math.round(d.ccSec)), "秒/試合"),
+      tile("避けたスキル", String(Math.round(d.dodged)), "発/試合"),
+      support && tile("回復+シールド", String(Math.round(d.healShieldPerMin)), "/分"),
+      d.steals > 0 && tile("スティール", String(d.steals), "回"),
+    ),
+  );
+
+  const table = el(
+    "table",
+    { class: "matches" },
+    el("thead", {}, el("tr", {}, el("th", {}, ""), el("th", {}, "チャンピオン"), el("th", {}, "K/D/A"), el("th", {}, "CS/分"), el("th", {}, "時間"), el("th", {}, "出来"))),
+    el("tbody", {}, ...player.matches.map((m, i) => matchRow(m, d.scores[i]))),
+  );
+  block.append(el("details", { class: "match-list" }, el("summary", {}, `${a.games}試合の一覧(新しい順)`), el("div", { class: "table-wrap" }, table)));
+  return block;
 }
 
 // --- ② 自己紹介 ---
@@ -338,6 +476,7 @@ function reviewAct(current: View, intro: Intro, review: Review): HTMLElement {
     talk.append(el("p", { class: "sub-head" }, "まだある、ちくちく"));
     for (const roast of review.roasts) talk.append(el("p", { class: "bubble critic" }, roast.text));
   }
+  talk.append(el("p", { class: "sub-head" }, "いちばん良かった試合"), el("p", { class: "bubble critic" }, review.highlight));
   talk.append(
     el(
       "div",

@@ -1,5 +1,5 @@
 // Riot API を呼ぶ側。APIキーを扱うので Node(Vite の開発サーバー)の中だけで動かし、画面側からは import しない。
-import type { ApiError, MatchStat, PlayerData, RankInfo, Role } from "../src/types";
+import type { ApiError, MatchStat, MatchTimeline, PlayerData, RankInfo, Role } from "../src/types";
 
 export type Region = "americas" | "asia" | "europe" | "sea";
 
@@ -77,6 +77,25 @@ const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v)
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 const has = (rec: Rec, key: string): boolean => typeof rec[key] === "number";
 
+const BLUE_TEAM = 100;
+
+/** 対面 = 相手チームで同じ teamPosition の人。本人のロールが空、または相手にいなければ null */
+function laneOpponentOf(players: readonly unknown[], me: Rec): Rec | null {
+  const position = str(me.teamPosition);
+  if (!position) return null;
+  return players.filter(isRec).find((p) => p.teamId !== me.teamId && p.teamPosition === position) ?? null;
+}
+
+/** info.teams[] の1チームが取ったドラゴン・バロン・ヘラルドの合計 */
+function teamObjectivesOf(team: Rec | undefined): number {
+  const objectives = team && isRec(team.objectives) ? team.objectives : null;
+  if (!objectives) return 0;
+  return ["dragon", "baron", "riftHerald"].reduce((total, key) => {
+    const entry = objectives[key];
+    return total + (isRec(entry) ? num(entry.kills) : 0);
+  }, 0);
+}
+
 /**
  * match-v5 の1試合から、puuid の本人の成績だけを抜き出す。
  * 本人がいない・サモナーズリフト以外・リメイク・形が壊れている試合は null。
@@ -116,6 +135,18 @@ export function slimMatch(match: unknown, puuid: string): MatchStat | null {
   // match-v5 だけ "FiddleSticks" と返す。Data Dragon のIDは "Fiddlesticks"
   const champion = str(me.championName) === "FiddleSticks" ? "Fiddlesticks" : str(me.championName);
 
+  // 対面との差(自分 − 対面)。数え方は本人の cs / gold / damage と同じ
+  const csOf = (p: Rec) => num(p.totalMinionsKilled) + num(p.neutralMinionsKilled);
+  const opponent = laneOpponentOf(players, me);
+  const teams = Array.isArray(info.teams) ? info.teams.filter(isRec) : [];
+
+  // ピンは種類ごとに「〜Pings」という項目で入っている(パッチで種類が増減する)ので、名前で拾って足す
+  const pings = Object.entries(me).reduce((total, [key, value]) => (key.endsWith("Pings") ? total + num(value) : total), 0);
+
+  // 一度も死ななかった試合は longestTimeSpentLiving が 0 で返ってくる。そのときは試合の長さがそのまま答え
+  const deaths = num(me.deaths);
+  const longestLivingSec = deaths === 0 && num(me.longestTimeSpentLiving) === 0 ? durationSec : num(me.longestTimeSpentLiving);
+
   return {
     matchId,
     queueId: num(info.queueId),
@@ -125,7 +156,7 @@ export function slimMatch(match: unknown, puuid: string): MatchStat | null {
     role: ROLES.includes(position) ? (position as Role) : "UNKNOWN",
     champion,
     kills: num(me.kills),
-    deaths: num(me.deaths),
+    deaths,
     assists: num(me.assists),
     cs: num(me.totalMinionsKilled) + num(me.neutralMinionsKilled),
     gold: num(me.goldEarned),
@@ -144,13 +175,137 @@ export function slimMatch(match: unknown, puuid: string): MatchStat | null {
     turretTakedowns: num(me.turretTakedowns),
     largestMultiKill: num(me.largestMultiKill),
     timeDeadSec: num(me.totalTimeSpentDead),
+
+    side: me.teamId === BLUE_TEAM ? "blue" : "red",
+    level: num(me.champLevel),
+    csDiff: opponent ? csOf(me) - csOf(opponent) : null,
+    goldDiff: opponent ? num(me.goldEarned) - num(opponent.goldEarned) : null,
+    damageDiff: opponent ? num(me.totalDamageDealtToChampions) - num(opponent.totalDamageDealtToChampions) : null,
+    // 1=対面より上 0=そうでない。challenges が無い古い試合は分からない
+    laneWon: challenges && has(challenges, "laningPhaseGoldExpAdvantage") ? num(challenges.laningPhaseGoldExpAdvantage) > 0 : null,
+    turretPlates: challenges ? num(challenges.turretPlatesTaken) : 0,
+    objectiveDamage: num(me.damageDealtToObjectives),
+    teamObjectives: teamObjectivesOf(teams.find((t) => t.teamId === me.teamId)),
+    healShield: num(me.totalHealsOnTeammates) + num(me.totalDamageShieldedOnTeammates),
+    ccSec: num(me.timeCCingOthers),
+    skillshotsDodged: challenges ? num(challenges.skillshotsDodged) : 0,
+    epicSteals: challenges ? num(challenges.epicMonsterSteals) : 0,
+    pings,
+    missingPings: num(me.enemyMissingPings),
+    surrendered: me.gameEndedInSurrender === true && me.win !== true,
+    longestLivingSec,
+    // タイムラインは別の呼び出しなので、ここでは空。fetchPlayer が slimTimeline の結果を入れる
+    timeline: null,
+  };
+}
+
+// ---- タイムラインの切り出し ----
+
+const MINUTE_MS = 60_000;
+/** フレームの時刻は数十ミリ秒ずれるので、このぶんは「その分のフレーム」とみなす */
+const FRAME_SLACK_MS = 5_000;
+/** サモナーズリフトの座標は青の本拠地がほぼ (0,0)、赤がほぼ (14870,14980)。x+y がこの値のあたりが川 */
+const RIVER_DIAGONAL = 14_900;
+/** 川からこれより先に入ったところを「相手側の陣地」とする */
+const DEEP_BAND = 2_000;
+
+/**
+ * match-v5 のタイムライン(/timeline)から、puuid の本人のぶんだけ抜き出す。
+ * チームと対面を知るために、同じ試合の match も渡す。形が壊れている・本人がいないときは null。
+ */
+export function slimTimeline(timeline: unknown, match: unknown, puuid: string): MatchTimeline | null {
+  if (!isRec(timeline) || !isRec(timeline.info) || !Array.isArray(timeline.info.frames)) return null;
+  if (!isRec(match) || !isRec(match.info) || !Array.isArray(match.info.participants)) return null;
+  // 番号(= 分)で引くので、並びはそのまま持っておく
+  const rawFrames: unknown[] = timeline.info.frames;
+  const frames = rawFrames.filter(isRec);
+  if (frames.length === 0) return null;
+  // 別の試合のタイムラインを取りちがえていたら使わない
+  const ids = [timeline.metadata, match.metadata].map((meta) => (isRec(meta) ? str(meta.matchId) : ""));
+  if (ids[0] && ids[1] && ids[0] !== ids[1]) return null;
+
+  const seats: unknown[] = match.info.participants;
+  const me = seats.find((p): p is Rec => isRec(p) && p.puuid === puuid);
+  if (!me) return null;
+
+  // タイムラインの中の番号(1〜10)。タイムラインの対応表 → match の participantId → 並び順、の順で探す
+  const table = Array.isArray(timeline.info.participants) ? timeline.info.participants.filter(isRec) : [];
+  const seatOf = (player: Rec): number => {
+    const listed = table.find((p) => p.puuid === player.puuid && str(p.puuid) !== "");
+    if (listed && num(listed.participantId) >= 1) return num(listed.participantId);
+    return num(player.participantId) >= 1 ? num(player.participantId) : seats.indexOf(player) + 1;
+  };
+  const myId = seatOf(me);
+  const opponent = laneOpponentOf(seats, me);
+  const opponentId = opponent ? seatOf(opponent) : null;
+
+  /** frames[minute] の、ある人の記録。その分まで試合が続いていなければ null */
+  const frameOf = (minute: number, id: number): Rec | null => {
+    const frame = rawFrames[minute];
+    if (!isRec(frame) || !isRec(frame.participantFrames)) return null;
+    // 最後のフレームは試合が終わった瞬間のもの。9分40秒で終わった試合の frames[10] は「10分時点」ではない
+    if (has(frame, "timestamp") && num(frame.timestamp) < minute * MINUTE_MS - FRAME_SLACK_MS) return null;
+    const mine = frame.participantFrames[String(id)];
+    return isRec(mine) ? mine : null;
+  };
+  const diffAt = (minute: number, value: (frame: Rec) => number | null): number | null => {
+    if (opponentId === null) return null;
+    const mine = frameOf(minute, myId);
+    const theirs = frameOf(minute, opponentId);
+    const a = mine && value(mine);
+    const b = theirs && value(theirs);
+    return typeof a === "number" && typeof b === "number" ? a - b : null;
+  };
+  const goldOf = (frame: Rec) => (has(frame, "totalGold") ? num(frame.totalGold) : null);
+  const csOf = (frame: Rec) =>
+    has(frame, "minionsKilled") || has(frame, "jungleMinionsKilled")
+      ? num(frame.minionsKilled) + num(frame.jungleMinionsKilled)
+      : null;
+
+  const blue = me.teamId === BLUE_TEAM;
+  let takedowns10 = 0;
+  const deaths: { at: number; solo: boolean; deep: boolean }[] = [];
+  for (const frame of frames) {
+    if (!Array.isArray(frame.events)) continue;
+    for (const event of frame.events) {
+      if (!isRec(event) || event.type !== "CHAMPION_KILL" || !has(event, "timestamp")) continue;
+      const at = num(event.timestamp);
+      // アシストが無いキルでは、assistingParticipantIds そのものが省かれる
+      const assists: unknown[] = Array.isArray(event.assistingParticipantIds) ? event.assistingParticipantIds : [];
+      if (event.victimId === myId) {
+        // killerId 0 はタワーやモンスターに倒された(エクスキュート)。1人にやられたとは数えない
+        const byChampion = Number.isInteger(event.killerId) && num(event.killerId) >= 1 && num(event.killerId) <= 10;
+        const where = isRec(event.position) && has(event.position, "x") && has(event.position, "y")
+          ? num(event.position.x) + num(event.position.y)
+          : null;
+        const deep = where !== null && (blue ? where > RIVER_DIAGONAL + DEEP_BAND : where < RIVER_DIAGONAL - DEEP_BAND);
+        deaths.push({ at, solo: byChampion && assists.length === 0, deep });
+      } else if (at < 10 * MINUTE_MS && (event.killerId === myId || assists.includes(myId))) {
+        takedowns10++;
+      }
+    }
+  }
+  deaths.sort((a, b) => a.at - b.at);
+
+  return {
+    goldDiff10: diffAt(10, goldOf),
+    goldDiff15: diffAt(15, goldOf),
+    csDiff10: diffAt(10, csOf),
+    takedowns10,
+    deathMinutes: deaths.map((d) => Math.round(d.at / (MINUTE_MS / 10)) / 10),
+    soloDeaths: deaths.filter((d) => d.solo).length,
+    deepDeaths: deaths.filter((d) => d.deep).length,
   };
 }
 
 // ---- Riot API ----
 
 const MAX_COUNT = 30;
-/** 開発用キーは1秒20回まで。試合の詳細を一度に取りにいく数をしぼっておく */
+/**
+ * 開発用キーは1秒20回・2分100回まで。試合の詳細とタイムラインを一度に取りにいく数をしぼっておく。
+ * 20試合を調べると、1回の検索で 4(アカウント・レベル・ランク・試合ID)+ 20(詳細)+ 20(タイムライン)= 約44回。
+ * 2分のあいだに3回目を調べると、途中で回数制限にかかる。
+ */
 const DETAIL_CONCURRENCY = 5;
 const MAX_RETRY = 2;
 const MAX_WAIT_MS = 10_000;
@@ -232,6 +387,25 @@ function clampCount(count: number): number {
   return Number.isFinite(count) ? Math.min(MAX_COUNT, Math.max(1, Math.trunc(count))) : 1;
 }
 
+/** 0 〜 count-1 の番号を、同時に limit 個までで順に job へ渡す。stop() が true になったら、残りは始めない */
+async function eachLimited(
+  count: number,
+  limit: number,
+  stop: () => boolean,
+  job: (index: number) => Promise<void>,
+): Promise<void> {
+  let next = 0;
+  const worker = async () => {
+    while (!stop() && next < count) await job(next++);
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, count) }, worker));
+}
+
+/** 残りを打ち切るべき失敗(キーが無効=続けても全部失敗、回数制限=続けるほど長引く)なら、そのエラーを返す */
+function fatalOf(e: unknown): RiotError | null {
+  return e instanceof RiotError && (e.code === "bad-key" || e.code === "rate-limit") ? e : null;
+}
+
 /** Riot ID から、レベル・ランク・直近の試合(新しい順)を集める */
 export async function fetchPlayer(opts: {
   apiKey: string;
@@ -269,35 +443,49 @@ export async function fetchPlayer(opts: {
   const ids = Array.isArray(idList) ? idList.filter((id): id is string => typeof id === "string") : [];
 
   // 1試合の失敗では全体を止めない。キーが無効(続けても全部失敗)と回数制限(続けるほど長引く)だけは残りを打ち切る
-  const found: (MatchStat | null)[] = new Array(ids.length).fill(null);
+  // raw はタイムラインの切り出し(チームと対面を調べる)に使うので、取っておく
+  const found: ({ id: string; stat: MatchStat; raw: unknown } | null)[] = new Array(ids.length).fill(null);
   let fatal: RiotError | null = null;
   let failures = 0;
-  let next = 0;
-  const worker = async () => {
-    while (!fatal && next < ids.length) {
-      const index = next++;
-      try {
-        found[index] = slimMatch(await get(region, `/lol/match/v5/matches/${enc(ids[index])}`), puuid);
-      } catch (e) {
-        failures++;
-        if (e instanceof RiotError && (e.code === "bad-key" || e.code === "rate-limit")) fatal ??= e;
-      }
+  await eachLimited(ids.length, DETAIL_CONCURRENCY, () => fatal !== null, async (index) => {
+    const id = ids[index];
+    try {
+      const raw = await get(region, `/lol/match/v5/matches/${enc(id)}`);
+      const stat = slimMatch(raw, puuid);
+      if (stat) found[index] = { id, stat, raw };
+    } catch (e) {
+      failures++;
+      fatal ??= fatalOf(e);
     }
-  };
-  await Promise.all(Array.from({ length: Math.min(DETAIL_CONCURRENCY, ids.length) }, worker));
+  });
 
   const stopped = fatal as RiotError | null;
   if (stopped?.code === "bad-key") throw stopped;
 
-  const matches = found
-    .filter((m): m is MatchStat => m !== null)
-    .sort((a, b) => b.gameStart - a.gameStart);
-  if (matches.length === 0) {
+  const kept = found.filter((m) => m !== null);
+  if (kept.length === 0) {
     // 1試合も読めなかった理由が通信側にあるなら、「試合がない」とは言わない
     if (stopped) throw stopped;
     if (failures > 0) throw new RiotError("upstream", "試合の詳細を取得できませんでした");
     throw new RiotError("no-matches", "集計できる試合がありません");
   }
+
+  // タイムラインは、くわしい解析のためのおまけ。取れなかった試合は timeline が null のまま、試合そのものは返す。
+  // 回数制限にかかったら(詳細の時点でかかっていた場合も)残りは取りにいかない。新しい試合から順に取るので、欠けるのは古い側。
+  // キーが無効なときだけは、詳細と同じく全体を bad-key で止める
+  let halted: RiotError | null = stopped;
+  await eachLimited(kept.length, DETAIL_CONCURRENCY, () => halted !== null, async (index) => {
+    const { id, stat, raw } = kept[index];
+    try {
+      stat.timeline = slimTimeline(await get(region, `/lol/match/v5/matches/${enc(id)}/timeline`), raw, puuid);
+    } catch (e) {
+      halted ??= fatalOf(e);
+    }
+  });
+  const timelineStop = halted as RiotError | null;
+  if (timelineStop?.code === "bad-key") throw timelineStop;
+
+  const matches = kept.map((m) => m.stat).sort((a, b) => b.gameStart - a.gameStart);
 
   return {
     // 大文字小文字や空白は、Riot に登録されている表記に合わせる

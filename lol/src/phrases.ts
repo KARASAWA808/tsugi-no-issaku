@@ -58,6 +58,9 @@ const TOPIC_NAMES: Record<PhraseTopic, true> = {
   objective: true, onetrick: true, winrate: true, firstblood: true, pool: true, multikill: true,
   feeder: true, grayscreen: true, lowcs: true, loselane: true, blind: true, nopink: true, afk: true, lowdamage: true,
   kdaplayer: true, coinflip: true, tourist: true, losing: true, nomad: true, noobjective: true,
+  lanewin: true, comeback: true, lategame: true, plates: true, healer: true, cc: true, dodger: true, form: true, steal: true,
+  behind15: true, earlydeath: true, deepdeath: true, solodeath: true, thrower: true, tilt: true, marathon: true,
+  nightloss: true, ff: true, pinger: true, slump: true, sidegap: true, latelose: true, badchamp: true,
   spirit: true,
 };
 export const PHRASE_TOPICS = Object.keys(TOPIC_NAMES) as PhraseTopic[];

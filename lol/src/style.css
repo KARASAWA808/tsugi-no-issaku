@@ -114,6 +114,38 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .champ b { display: block; }
 .champ span { color: var(--muted); font-size: .78rem; }
 
+/* ①のつづき: くわしい解析 */
+.detail { display: flex; flex-direction: column; gap: 12px; border-top: 1px dashed var(--line); padding-top: 16px; margin-top: 4px; }
+.detail h3 { font-size: 1.05rem; }
+.detail h4 { font-size: .85rem; color: var(--muted); margin-top: 6px; }
+.phase-bar { display: flex; height: 26px; border-radius: 6px; overflow: hidden; background: var(--sunken); font-size: .75rem; font-weight: 700; line-height: 26px; }
+.phase { min-width: 0; text-align: center; white-space: nowrap; overflow: hidden; color: var(--me-ink); }
+.phase.early { background: var(--critic); color: var(--critic-ink); }
+.phase.mid { background: var(--me); }
+.phase.late { background: var(--muted); color: var(--bg); }
+.split-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 12px 24px; }
+.split-group { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.split-group h4 { margin-top: 0; font-size: .78rem; }
+.splits { display: flex; flex-direction: column; gap: 4px; }
+.split { display: grid; grid-template-columns: 7.5em 3.6em 1fr 2.8em; align-items: center; gap: 8px; font-size: .85rem; }
+.split .bar, .match-score .bar { height: 8px; border-radius: 4px; background: var(--sunken); overflow: hidden; display: block; }
+.split .bar i, .match-score .bar i { display: block; height: 100%; background: var(--me); border-radius: 4px; }
+.split.low .bar i, .match-score .bar.low i { background: var(--critic); }
+.split-games { color: var(--muted); font-size: .78rem; text-align: right; font-variant-numeric: tabular-nums; }
+.split .score, .match-score .score { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+.match-list summary { cursor: pointer; font-weight: 700; font-size: .9rem; padding: 6px 0; }
+.table-wrap { overflow-x: auto; }
+.matches { border-collapse: collapse; width: 100%; font-size: .85rem; min-width: 440px; }
+.matches th, .matches td { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+.matches thead th { color: var(--muted); font-size: .75rem; }
+.matches tbody th { font-weight: 700; }
+.matches tbody th small { color: var(--muted); font-weight: 500; margin-left: .5em; }
+.matches .num { font-variant-numeric: tabular-nums; }
+.matches .result { font-weight: 700; width: 2em; }
+.matches .won .result { color: var(--me); }
+.matches .lost .result { color: var(--critic); }
+.match-score { display: grid; grid-template-columns: minmax(40px, 1fr) 2em; align-items: center; gap: 8px; min-width: 90px; }
+
 /* ② 自己紹介 と ③ 評価 の吹き出し */
 .talk { display: flex; flex-direction: column; gap: 10px; }
 .bubble { max-width: min(100%, 34em); border-radius: 14px; padding: 10px 16px; overflow-wrap: anywhere; }

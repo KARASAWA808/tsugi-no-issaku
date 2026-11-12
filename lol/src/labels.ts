@@ -67,3 +67,23 @@ export function hashString(text: string): number {
 export function pick<T>(list: readonly T[], rng: () => number): T {
   return list[Math.floor(rng() * list.length)];
 }
+
+/**
+ * はっきり度(strength)つきの一覧から count 個を選ぶ。並びは元の順のまま返す。
+ * variant が 0 なら上から順(いちばん目立つもの)。1 以上なら、はっきり度を重みにした抽選で、言い直すたびに顔ぶれが変わる。
+ */
+export function choose<T extends { strength: number }>(list: readonly T[], count: number, rng: () => number, variant: number): T[] {
+  if (variant === 0 || list.length <= count) return list.slice(0, count);
+  const pool = list.map((item, index) => ({ item, index, weight: item.strength + 0.25 }));
+  const chosen: { item: T; index: number }[] = [];
+  while (chosen.length < count && pool.length > 0) {
+    let roll = rng() * pool.reduce((total, p) => total + p.weight, 0);
+    let at = 0;
+    while (at < pool.length - 1 && roll >= pool[at].weight) {
+      roll -= pool[at].weight;
+      at += 1;
+    }
+    chosen.push(...pool.splice(at, 1));
+  }
+  return chosen.sort((a, b) => a.index - b.index).map((c) => c.item);
+}
