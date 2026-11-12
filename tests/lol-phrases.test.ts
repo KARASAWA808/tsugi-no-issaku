@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { analyze } from "../lol/src/analyze";
 import { buildIntro } from "../lol/src/intro";
 import { makeRng } from "../lol/src/labels";
+import { EXTREME_PHRASES } from "../lol/src/extreme-phrases";
 import { IMAGINED_PHRASES } from "../lol/src/imagined-phrases";
+import { EXTRA_PHRASES } from "../lol/src/phrases-extra";
 import { BUILTIN_PHRASES, PHRASE_TOPICS, type PhraseBook, SLOTS, countPhrases, emptyBook, makeSpeaker, mergePhrases, parsePhrases, topicsOf } from "../lol/src/phrases";
 import { buildReview } from "../lol/src/review";
 import { SAMPLE_PLAYERS, samplePlayer } from "../lol/src/sample";
@@ -35,7 +37,7 @@ describe("parsePhrases", () => {
   });
 
   it("長すぎる言い回しと、多すぎるぶんは入れない", () => {
-    expect(parsePhrases({ roast: ["あ".repeat(81), "い".repeat(80)] }).roast).toHaveLength(1);
+    expect(parsePhrases({ roast: ["あ".repeat(241), "い".repeat(240)] }).roast).toHaveLength(1);
     expect(parsePhrases({ roast: Array.from({ length: 500 }, (_, i) => `口ぐせ${i}`) }).roast).toHaveLength(200);
   });
 
@@ -57,6 +59,11 @@ describe("parsePhrases", () => {
   it("評価の限定を読む。知らない評価や空の一覧は、だれにでも出ないよう捨てる", () => {
     const parsed = parsePhrases({ opening: [{ text: "低いとき", grades: ["C", "D"] }, { text: "書きまちがい", grades: ["E"] }, { text: "空", grades: [] }, { text: "形ちがい", grades: "D" }] });
     expect(parsed.opening).toEqual([{ text: "低いとき", grades: ["C", "D"] }]);
+  });
+
+  it("チャンピオンの限定を読む。IDの形でないものは捨てる", () => {
+    const parsed = parsePhrases({ aside: [{ text: "ヤスオの話", champion: "Yasuo" }, { text: "2体", champion: ["Zed", "Yone"] }, { text: "日本語名", champion: "ヤスオ" }, { text: "空", champion: [] }] });
+    expect(parsed.aside).toEqual([{ text: "ヤスオの話", champion: "Yasuo" }, { text: "2体", champion: ["Zed", "Yone"] }]);
   });
 
   it("出典の覚え書きは残す", () => {
@@ -154,6 +161,24 @@ describe("makeSpeaker", () => {
     expect(makeSpeaker(only, makeRng(1), "テスト")("opening", "x")).toBe("x");
   });
 
+  it("チャンピオンを限定した言い回しは、そのチャンピオンを使った人にだけ、いちばん先に使う", () => {
+    const mixed = book({ aside: [{ text: "雑談" }, { text: "ヤスオの話", champion: "Yasuo" }, { text: "デスの話", topic: "feeder" }] });
+    for (let seed = 0; seed < 10; seed++) {
+      const yasuo = makeSpeaker(mixed, makeRng(seed), "テスト", "MIDDLE", "D", new Set(["Yasuo", "Zed"]));
+      expect(yasuo("aside", "", "feeder")).toBe("ヤスオの話。");
+      expect(yasuo("aside", "", "feeder")).toBe("デスの話。");
+      expect(yasuo("aside", "", "feeder")).toBe("雑談。");
+      const ahri = makeSpeaker(mixed, makeRng(seed), "テスト", "MIDDLE", "D", new Set(["Ahri"]));
+      expect(ahri("aside", "")).toBe("雑談。");
+      expect(ahri("aside", "")).toBe("");
+    }
+  });
+
+  it("本文なしで呼ぶと(脱線)、言い回しだけを返す", () => {
+    const say = makeSpeaker(book({ aside: [{ text: "犬派なんだよね" }, { text: "マジ？", after: true }] }), makeRng(2), "テスト");
+    expect(new Set([say("aside", ""), say("aside", "")])).toEqual(new Set(["犬派なんだよね。", "マジ？"]));
+  });
+
   it("同じ言い回しは1度だけ。使い切った場所には何も付けない", () => {
     const texts = ["あ、", "い、", "う、"];
     const say = makeSpeaker(book({ roast: texts.map((text) => ({ text })) }), makeRng(7), "テスト");
@@ -209,7 +234,7 @@ describe("buildReview と口ぐせ", () => {
 
 // 「死ぬな」「殺されてた」「殴り返す」はゲームの中の話なので引っかけない
 const BANNED_VIOLENCE = /しね|死ね|死んで|死んどけ|しんどけ|4ね|〇ね|56[しせ]|ぶん殴|殺す|殺せ/;
-const BANNED_BODY = /女|男|ババア|ジジイ|デブ|ブタ|太っ|体型|体脂肪|メガネ|ブス|生え際|顔キモ|ちんちん/;
+const BANNED_BODY = /女|男|ババア|ジジイ|デブ|ブタ|太っ|体型|体脂肪|メガネ|(?<!サ)ブス|生え際|顔キモ|ちんちん/;
 // シートに出てくる、まわりの配信者・選手の呼び名
 const BANNED_NAMES = /zerost|ぜろすと|ゼロスト|たかや|たかス|じゃす|ジャス|しゃる|スタンミ|スタは|忍者|にんにん|なぎさっち|とおこ|葛葉|くずは|evi|えび|みっちー|ヘンディー|ローレン|UG|あかりん|メイカ|めいか|ボドカ|おぼ|象先輩|釈迦|shaka|k4sen|かせん|アルファ|INO|りーちゃん|ひなーの|ひなの|うるーか|よむ|よいち|day1|ta1yo|清川|増永|増アカ|代表|faker|zeus|菅原|村瀬|星野|らむち|なちょ|ういにゃん|あーちゃん|マーブル|わらぶい|ハムさん|ゆきお|rain/i;
 
@@ -250,8 +275,9 @@ describe("BUILTIN_PHRASES", () => {
     }
   });
 
-  it("どの場所にも口ぐせがある", () => {
-    for (const slot of SLOTS) expect(BUILTIN_PHRASES[slot].length, slot).toBeGreaterThan(0);
+  it("どの場所にも口ぐせがある(追加の口ぐせと合わせて)", () => {
+    const merged = mergePhrases(BUILTIN_PHRASES, EXTRA_PHRASES);
+    for (const slot of SLOTS) expect(merged[slot].length, slot).toBeGreaterThan(0);
   });
 
   it("ロール限定の口ぐせは、そのロールのサンプルにだけ出る", () => {
@@ -377,7 +403,7 @@ describe("IMAGINED_PHRASES(言いそうな台詞として作ったもの)", () =
 });
 
 describe("口ぐせと本文のかみ合わせ(実際の発言と創作を混ぜた状態で)", () => {
-  const merged = mergePhrases(BUILTIN_PHRASES, IMAGINED_PHRASES);
+  const merged = mergePhrases(BUILTIN_PHRASES, EXTRA_PHRASES, IMAGINED_PHRASES);
   /** そのサンプルを40回言い直したときに出る文章を全部つなげたもの */
   const everything = (id: string): string =>
     Array.from({ length: 40 }, (_, variant) => {
@@ -418,5 +444,123 @@ describe("口ぐせと本文のかみ合わせ(実際の発言と創作を混ぜ
       expect(texts[id], id).not.toContain("くだらないスキルを吐く");
       expect(texts[id], id).not.toContain("おかしい人が2人も居たら");
     }
+  });
+});
+
+// 性別をけなす言葉。過激な口ぐせにも入れない
+const BANNED_GENDER = /女|男のくせ|ババア|(?<!サ)ブス|メス|ちんちん/;
+
+describe("EXTRA_PHRASES(追加の口ぐせ。場面が固有のもの・長いもの・雑談)", () => {
+  const entries = SLOTS.flatMap((slot) => EXTRA_PHRASES[slot].map((phrase) => ({ slot, phrase })));
+
+  it("読み込みと同じ決まりを守り、すべてに出典がある", () => {
+    expect(parsePhrases(EXTRA_PHRASES)).toEqual(EXTRA_PHRASES);
+    for (const { phrase } of entries) expect(phrase.source, phrase.text).toMatch(/^らいさまちくちく集/);
+  });
+
+  it("最初から出る口ぐせなので、死や暴力を願う言葉・見た目へのいじり・性別をけなす言葉・実在の人の名前を入れない", () => {
+    for (const { phrase } of entries) {
+      expect(phrase.text, phrase.text).not.toMatch(BANNED_VIOLENCE);
+      expect(phrase.text, phrase.text).not.toMatch(BANNED_BODY);
+      expect(phrase.text, phrase.text).not.toMatch(BANNED_GENDER);
+      expect(phrase.text, phrase.text).not.toMatch(BANNED_NAMES);
+    }
+  });
+
+  it("言い回しを変えたものや抜粋には、出典にそう書いてある", () => {
+    for (const { phrase } of entries) {
+      if (phrase.text.includes("{name}")) expect(phrase.source, phrase.text).toMatch(/名前を置きかえ/);
+    }
+    expect(entries.filter(({ phrase }) => /言い回しを一部改変|抜粋|名前を省略/.test(phrase.source ?? "")).length).toBeGreaterThan(20);
+  });
+
+  it("脱線には、雑談と、チャンピオンの話と、弱みに合わせた長い話がある", () => {
+    const asides = EXTRA_PHRASES.aside;
+    expect(asides.filter((p) => p.champion === undefined && p.topic === undefined).length).toBeGreaterThan(40);
+    expect(asides.filter((p) => p.champion !== undefined).length).toBeGreaterThan(30);
+    expect(asides.filter((p) => p.topic !== undefined).length).toBeGreaterThan(10);
+  });
+});
+
+describe("EXTREME_PHRASES(過激な口ぐせ。自分でチェックを入れたときだけ)", () => {
+  const entries = SLOTS.flatMap((slot) => EXTREME_PHRASES[slot].map((phrase) => ({ slot, phrase })));
+  const usual = [BUILTIN_PHRASES, EXTRA_PHRASES, IMAGINED_PHRASES];
+
+  it("読み込みと同じ決まりを守り、すべてに出典がある", () => {
+    expect(parsePhrases(EXTREME_PHRASES)).toEqual(EXTREME_PHRASES);
+    for (const { phrase } of entries) expect(phrase.source, phrase.text).toMatch(/^らいさまちくちく集/);
+  });
+
+  it("過激な口ぐせにも、性別をけなす言葉と実在の人の名前は入れない", () => {
+    for (const { phrase } of entries) {
+      expect(phrase.text, phrase.text).not.toMatch(BANNED_GENDER);
+      expect(phrase.text, phrase.text).not.toMatch(BANNED_NAMES);
+    }
+  });
+
+  it("死や暴力を願う言葉と見た目へのいじりは、ここにだけある", () => {
+    for (const book of usual) {
+      for (const slot of SLOTS) {
+        for (const phrase of book[slot]) {
+          expect(phrase.text, phrase.text).not.toMatch(BANNED_VIOLENCE);
+          expect(phrase.text, phrase.text).not.toMatch(BANNED_BODY);
+        }
+      }
+    }
+    expect(entries.some(({ phrase }) => BANNED_VIOLENCE.test(phrase.text))).toBe(true);
+    expect(entries.some(({ phrase }) => BANNED_BODY.test(phrase.text))).toBe(true);
+  });
+
+  it("ふだんの口ぐせと同じ文は入れていない(チェックを外したのに出る、ということがないように)", () => {
+    const usualTexts = new Set(usual.flatMap((book) => SLOTS.flatMap((slot) => book[slot].map((p) => p.text))));
+    for (const { phrase } of entries) expect(usualTexts.has(phrase.text), phrase.text).toBe(false);
+  });
+});
+
+describe("脱線(評価文には付けず、独立して出すひとこと)", () => {
+  const merged = mergePhrases(BUILTIN_PHRASES, EXTRA_PHRASES, IMAGINED_PHRASES);
+
+  it("口ぐせを渡さなければ、脱線は出ない", () => {
+    for (const s of SAMPLE_PLAYERS) expect(review(s.id).asides).toEqual([]);
+  });
+
+  it("脱線は2つまでで、同じものを2度出さない", () => {
+    for (const s of SAMPLE_PLAYERS) {
+      for (let variant = 0; variant < 20; variant++) {
+        const { asides } = review(s.id, merged, variant);
+        expect(asides.length).toBeGreaterThanOrEqual(1);
+        expect(asides.length).toBeLessThanOrEqual(2);
+        expect(new Set(asides).size).toBe(asides.length);
+        for (const text of asides) expect(text.length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("使っているチャンピオンの話は、そのチャンピオンを使った人にだけ出る", () => {
+    const all = (id: string) => Array.from({ length: 40 }, (_, variant) => review(id, merged, variant).asides.join("\n")).join("\n");
+    const texts = Object.fromEntries(SAMPLE_PLAYERS.map((s) => [s.id, all(s.id)]));
+    // mid-feeder は Yasuo と Zed、top-farmer は Nasus、jg-solid は LeeSin を使っている
+    expect(texts["mid-feeder"]).toMatch(/ヤスシ|ゼド/);
+    expect(texts["top-farmer"]).toContain("ナサス");
+    expect(texts["jg-solid"]).toContain("キック");
+    for (const s of SAMPLE_PLAYERS) {
+      if (s.id !== "mid-feeder") expect(texts[s.id], s.id).not.toMatch(/ヤスシ|ゼド使って/);
+      if (s.id !== "top-farmer") expect(texts[s.id], s.id).not.toContain("ナサス");
+    }
+  });
+
+  it("過激な口ぐせを混ぜなければ、「しね」も見た目へのいじりも出ない。混ぜると出る", () => {
+    const everything = (phrases: PhraseBook) =>
+      SAMPLE_PLAYERS.flatMap((s) =>
+        Array.from({ length: 30 }, (_, variant) => {
+          const r = review(s.id, phrases, variant);
+          return [r.opening, ...r.replies.map((x) => x.text), ...r.roasts.map((x) => x.text), ...r.asides, r.verdict, r.homework].join("\n");
+        }),
+      ).join("\n");
+    const usual = everything(merged);
+    expect(usual).not.toMatch(/しね|死ね|死んどけ|しんどけ|ぶん殴/);
+    expect(usual).not.toMatch(/デブ|太くね|メガネ|お腹が出てる/);
+    const extreme = everything(mergePhrases(merged, EXTREME_PHRASES));
+    expect(extreme).toMatch(/しね|死ね|死んどけ|しんどけ/);
   });
 });

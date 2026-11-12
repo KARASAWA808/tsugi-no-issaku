@@ -152,6 +152,7 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .bubble.me { align-self: flex-end; background: var(--me-soft); border: 1px solid color-mix(in srgb, var(--me) 35%, transparent); border-bottom-right-radius: 4px; }
 .bubble.me.claim { font-weight: 700; }
 .bubble.critic { align-self: flex-start; background: var(--critic-soft); border: 1px solid color-mix(in srgb, var(--critic) 35%, transparent); border-bottom-left-radius: 4px; }
+.bubble.critic.aside { border-style: dashed; font-size: .95rem; }
 .speaker { font-size: .8rem; font-weight: 700; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .speaker.me { align-self: flex-end; color: var(--me); }
 .speaker.critic { color: var(--critic); }

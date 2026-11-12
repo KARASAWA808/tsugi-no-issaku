@@ -188,4 +188,6 @@ export const IMAGINED_PHRASES: PhraseBook = {
     onAfter("ff", "負けてる試合が一番練習になるんだよね"),
     onAfter("badchamp", "好きと得意は違うんだよね"),
   ],
+  // 脱線は実際の発言だけにする(作った雑談は入れない)
+  aside: [],
 };

@@ -26,6 +26,8 @@ export interface Review {
   replies: Reply[];
   /** 自己紹介で触れなかった弱み */
   roasts: Roast[];
+  /** 脱線。評価とは関係なく挟まる独立したひとこと(雑談、長い台詞、使っているチャンピオンの話)。口ぐせが無ければ空 */
+  asides: string[];
   grade: Grade;
   /** いちばん出来の良かった試合へのひとこと */
   highlight: string;
@@ -45,7 +47,7 @@ export function buildReview(player: PlayerData, analysis: Analysis, intro: Intro
   const rng = makeRng(seedOf(player, options.variant) ^ 0x5bd1e995);
   const v = valuesOf(player, analysis, options.champName ?? ((id) => id));
   // 口ぐせは別の乱数で選ぶ。口ぐせを足しても、元の評価文の選ばれ方は変わらない
-  const say = makeSpeaker(options.phrases ?? emptyBook(), makeRng(seedOf(player, options.variant) ^ 0x2c1b3c6d), player.gameName, analysis.mainRole, analysis.grade);
+  const say = makeSpeaker(options.phrases ?? emptyBook(), makeRng(seedOf(player, options.variant) ^ 0x2c1b3c6d), player.gameName, analysis.mainRole, analysis.grade, new Set(analysis.champions.map((c) => c.champion)));
   const weak = new Set(analysis.weaknesses.map((w) => w.id));
   const mentioned = new Set<WeaknessId>();
 
@@ -82,12 +84,17 @@ export function buildReview(player: PlayerData, analysis: Analysis, intro: Intro
 
   // 称号と宿題のもとにする弱み。最初はいちばん目立つもの、言い直すと上位3つのどれか
   const worst = choose(analysis.weaknesses.slice(0, 3), 1, rng, variant).at(0);
+  // 脱線は2つまで。1つ目は使っているチャンピオンやいちばんの弱みに合うもの、2つ目はただの雑談
+  // 雑談のほうは、チャンピオンの話に出番を取られないよう、チャンピオンを知らない別の話し手に選ばせる
+  const chat = makeSpeaker(options.phrases ?? emptyBook(), makeRng(seedOf(player, options.variant) ^ 0x7f4a7c15), player.gameName, analysis.mainRole, analysis.grade);
+  const asides = [...new Set([say("aside", "", worst?.id), chat("aside", "")])].filter((text) => text !== "");
   const few = analysis.games < 8 ? `ただ${v.games}試合しかないから、話半分で聞いて。` : "";
   const high = analysis.grade === "S" || analysis.grade === "A";
   return {
     opening: say("opening", `${pick(OPENINGS, rng)(v)}${few}`),
     replies,
     roasts,
+    asides,
     grade: analysis.grade,
     highlight: pick(HIGHLIGHTS, rng)(v),
     title: pick(worst ? TITLES[worst.id] : CLEAN_TITLES[analysis.grade], rng),

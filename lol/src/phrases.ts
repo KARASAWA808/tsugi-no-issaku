@@ -24,9 +24,11 @@ export type Slot =
   /** 総評(B・C・D のとき) */
   | "verdictLow"
   /** 次の宿題を出すとき */
-  | "homework";
+  | "homework"
+  /** 脱線。評価文には付けず、独立した吹き出しで出す(雑談、長い台詞、使っているチャンピオンの話) */
+  | "aside";
 
-export const SLOTS: readonly Slot[] = ["opening", "accept", "reject", "roast", "verdictHigh", "verdictLow", "homework"];
+export const SLOTS: readonly Slot[] = ["opening", "accept", "reject", "roast", "verdictHigh", "verdictLow", "homework", "aside"];
 
 export interface Phrase {
   /** 言い回し。`{name}` はプレイヤー名に置きかわる */
@@ -37,22 +39,26 @@ export interface Phrase {
   role?: Role;
   /** 書くと、その話題(複数なら、そのどれか)の評価文にだけ使う(「ファームが下手」はCSの指摘にだけ、など) */
   topic?: PhraseTopic | readonly PhraseTopic[];
+  /** 書くと、直近の試合でこのチャンピオン(Data Dragon のID。複数なら、そのどれか)を使った人にだけ使う */
+  champion?: string | readonly string[];
   /** 書くと、総合評価がこのどれかの人にだけ使う(きつい言い回しを高評価の人に出さない、など) */
   grades?: readonly Grade[];
   /** どこで確かめた言い回しか(画面には出さない覚え書き) */
   source?: string;
   /** true なら、実際の発言ではなく「言いそうな台詞」として作ったもの。実際の発言より出にくくする */
   imagined?: boolean;
+  /** 出やすさ。省くと1。数の少ない口ぐせを目立たせたいときに大きくする */
+  weight?: number;
 }
 
 export type PhraseBook = Record<Slot, Phrase[]>;
 
 export const emptyBook = (): PhraseBook => ({
-  opening: [], accept: [], reject: [], roast: [], verdictHigh: [], verdictLow: [], homework: [],
+  opening: [], accept: [], reject: [], roast: [], verdictHigh: [], verdictLow: [], homework: [], aside: [],
 });
 
 /** 1つの言い回しの長さと、1つの場所に置ける数の上限(手元のファイルが壊れていても画面が崩れないように) */
-const MAX_LENGTH = 80;
+const MAX_LENGTH = 240;
 const MAX_PER_SLOT = 200;
 const MAX_SOURCE_LENGTH = 200;
 const ROLES: readonly string[] = ["TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"];
@@ -73,7 +79,7 @@ export const PHRASE_TOPICS = Object.keys(TOPIC_NAMES) as PhraseTopic[];
 function parsePhrase(item: unknown): Phrase | null {
   const raw = typeof item === "string" ? { text: item } : item;
   if (typeof raw !== "object" || raw === null) return null;
-  const { text, after, role, topic, grades, source, imagined } = raw as Record<string, unknown>;
+  const { text, after, role, topic, champion, grades, source, imagined, weight } = raw as Record<string, unknown>;
   if (typeof text !== "string") return null;
   const trimmed = text.trim();
   if (trimmed === "" || trimmed.length > MAX_LENGTH) return null;
@@ -89,6 +95,11 @@ function parsePhrase(item: unknown): Phrase | null {
     if (list.length === 0 || !list.every((t) => typeof t === "string" && Object.hasOwn(TOPIC_NAMES, t))) return null;
     phrase.topic = (Array.isArray(topic) ? list : list[0]) as PhraseTopic | PhraseTopic[];
   }
+  if (champion !== undefined) {
+    const list = Array.isArray(champion) ? champion : [champion];
+    if (list.length === 0 || !list.every((c) => typeof c === "string" && /^[A-Za-z]{2,24}$/.test(c))) return null;
+    phrase.champion = (Array.isArray(champion) ? list : list[0]) as string | string[];
+  }
   if (grades !== undefined) {
     // 評価の書きまちがいも、だれにでも出てしまわないよう捨てる
     if (!Array.isArray(grades) || grades.length === 0 || !grades.every((g) => typeof g === "string" && GRADES.includes(g))) return null;
@@ -96,6 +107,7 @@ function parsePhrase(item: unknown): Phrase | null {
   }
   if (typeof source === "string" && source.trim() !== "") phrase.source = source.trim().slice(0, MAX_SOURCE_LENGTH);
   if (imagined === true) phrase.imagined = true;
+  if (typeof weight === "number" && weight > 0 && weight <= 10) phrase.weight = weight;
   return phrase;
 }
 
@@ -133,6 +145,10 @@ export function mergePhrases(...books: readonly PhraseBook[]): PhraseBook {
   return merged;
 }
 
+/** その口ぐせが合わせるチャンピオンの一覧。チャンピオンを選ばないものは空 */
+export const championsOf = (phrase: Phrase): readonly string[] =>
+  phrase.champion === undefined ? [] : typeof phrase.champion === "string" ? [phrase.champion] : phrase.champion;
+
 /** その口ぐせが合わせる話題の一覧。話題を選ばないものは空 */
 export const topicsOf = (phrase: Phrase): readonly PhraseTopic[] =>
   phrase.topic === undefined ? [] : typeof phrase.topic === "string" ? [phrase.topic] : phrase.topic;
@@ -148,7 +164,7 @@ const TRAILING = /[!?\uFF01\uFF1F.…~\uFF5E〜ー♪♡wｗ・]$/;
  * 評価文に口ぐせを付ける関数を作る(1回の評価につき1つ作る)。
  * 多く使うほどそれらしくなるので、口ぐせがある場所では毎回付ける。
  * ただし同じ言い回しは1回の評価で1度だけ。使い切った場所には何も付けない(同じ台詞が並ぶと嘘くさくなる)。
- * 選ぶ順番は、話題の合うもの → ロール限定のもの → どこでも使えるもの。
+ * 選ぶ順番は、使っているチャンピオンの話 → 話題の合うもの → ロール限定のもの → どこでも使えるもの。
  */
 export function makeSpeaker(
   book: PhraseBook,
@@ -156,6 +172,7 @@ export function makeSpeaker(
   name: string,
   role: Role = "UNKNOWN",
   grade?: Grade,
+  champions: ReadonlySet<string> = new Set(),
 ): (slot: Slot, line: string, topic?: PhraseTopic) => string {
   const used = new Set<string>();
 
@@ -165,6 +182,7 @@ export function makeSpeaker(
       (p) =>
         (p.role === undefined || p.role === role) &&
         (p.topic === undefined || (topic !== undefined && topicsOf(p).includes(topic))) &&
+        (p.champion === undefined || championsOf(p).some((c) => champions.has(c))) &&
         (p.grades === undefined || (grade !== undefined && p.grades.includes(grade))) &&
         !used.has(p.text),
     );
@@ -176,9 +194,11 @@ export function makeSpeaker(
     const general = limited.length > 0 ? limited : fresh.filter((p) => p.topic === undefined);
     const onlyImagined = onTopic.length > 0 && onTopic.every((p) => p.imagined);
     const skipTopic = onlyImagined && general.some((p) => !p.imagined) && rng() < 0.5;
-    const pool = onTopic.length > 0 && !skipTopic ? onTopic : general.length > 0 ? general : fresh;
+    // 使っているチャンピオンの話は出番がいちばん少ないので、あれば最優先
+    const onChampion = fresh.filter((p) => p.champion !== undefined);
+    const pool = onChampion.length > 0 ? onChampion : onTopic.length > 0 && !skipTopic ? onTopic : general.length > 0 ? general : fresh;
     // 作った台詞は、実際の発言の半分の出やすさにする(実際の発言があるうちは、そちらが主役)
-    const weightOf = (p: Phrase): number => (p.imagined ? 0.5 : 1);
+    const weightOf = (p: Phrase): number => (p.weight ?? 1) * (p.imagined ? 0.5 : 1);
     let roll = rng() * pool.reduce((total, p) => total + weightOf(p), 0);
     let at = 0;
     while (at < pool.length - 1 && roll >= weightOf(pool[at])) {
@@ -188,6 +208,8 @@ export function makeSpeaker(
     const phrase = pool[at];
     used.add(phrase.text);
     const text = phrase.text.replaceAll("{name}", name);
+    // 脱線は評価文に付けず、それだけで出す
+    if (line === "") return CLOSED.test(text) || TRAILING.test(text) ? text : `${text}。`;
     if (phrase.after) return `${line}${CLOSED.test(text) || TRAILING.test(text) ? text : `${text}。`}`;
     return `${text}${CLOSED.test(text) ? "" : TRAILING.test(text) ? " " : "。"}${line}`;
   };
@@ -517,4 +539,6 @@ export const BUILTIN_PHRASES: PhraseBook = {
       source: "https://www.youtube.com/watch?v=bV1YgEaybWM(検索結果の引用。表記は未確認)",
     },
   ],
+  // 脱線は phrases-extra.ts にまとめてある
+  aside: [],
 };

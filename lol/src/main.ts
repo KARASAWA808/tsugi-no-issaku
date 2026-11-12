@@ -3,10 +3,12 @@
 import "./style.css";
 import { type Analysis, type Axis, analyze } from "./analyze";
 import { type Split, winRateOf } from "./detail";
+import { EXTREME_PHRASES } from "./extreme-phrases";
 import { IMAGINED_PHRASES } from "./imagined-phrases";
 import { type Intro, buildIntro } from "./intro";
 import { CRITIC_NAME, ROLE_LABELS, f1, pct, rankLabel } from "./labels";
 import { BUILTIN_PHRASES, type PhraseBook, emptyBook, mergePhrases, parsePhrases } from "./phrases";
+import { EXTRA_PHRASES } from "./phrases-extra";
 import { type Review, buildReview } from "./review";
 import { SAMPLE_PLAYERS, samplePlayer } from "./sample";
 import type { ApiError, MatchStat, PlayerData } from "./types";
@@ -28,6 +30,7 @@ const PLATFORM_LABELS: readonly (readonly [string, string])[] = [
 ];
 const STORAGE_KEY = "karakuchi-dojo:last";
 const IMAGINED_KEY = "karakuchi-dojo:imagined";
+const EXTREME_KEY = "karakuchi-dojo:extreme";
 
 type Child = Node | string | null | false;
 
@@ -153,6 +156,23 @@ function setUseImagined(on: boolean): void {
   useImagined = on;
   try {
     localStorage.setItem(IMAGINED_KEY, on ? "on" : "off");
+  } catch {
+    // 何もしない
+  }
+}
+
+// --- 過激な口ぐせ(「しね」系・見た目へのいじり)も混ぜるか。自分で入れたときだけ。覚えられなければ、開くたびにオフ ---
+let useExtreme = false;
+try {
+  useExtreme = localStorage.getItem(EXTREME_KEY) === "on";
+} catch {
+  // 何もしない
+}
+
+function setUseExtreme(on: boolean): void {
+  useExtreme = on;
+  try {
+    localStorage.setItem(EXTREME_KEY, on ? "on" : "off");
   } catch {
     // 何もしない
   }
@@ -495,6 +515,10 @@ function reviewAct(current: View, intro: Intro, review: Review): HTMLElement {
     talk.append(el("p", { class: "sub-head" }, "まだある、ちくちく"));
     for (const roast of review.roasts) talk.append(el("p", { class: "bubble critic" }, roast.text));
   }
+  if (review.asides.length > 0) {
+    talk.append(el("p", { class: "sub-head" }, "脱線"));
+    for (const aside of review.asides) talk.append(el("p", { class: "bubble critic aside" }, aside));
+  }
   talk.append(el("p", { class: "sub-head" }, "いちばん良かった試合"), el("p", { class: "bubble critic" }, review.highlight));
   talk.append(
     el(
@@ -532,6 +556,14 @@ function reviewAct(current: View, intro: Intro, review: Review): HTMLElement {
     document.getElementById("useImagined")?.focus();
   });
 
+  const extreme = el("input", { type: "checkbox", id: "useExtreme" });
+  extreme.checked = useExtreme;
+  extreme.addEventListener("change", () => {
+    setUseExtreme(extreme.checked);
+    render();
+    document.getElementById("useExtreme")?.focus();
+  });
+
   return el(
     "section",
     { class: "act", id: "review", "aria-label": "辛口評価" },
@@ -543,6 +575,17 @@ function reviewAct(current: View, intro: Intro, review: Review): HTMLElement {
       { class: "toggle", for: "useImagined" },
       imagined,
       el("span", {}, "言いそうな台詞も混ぜる", el("small", {}, "オフにすると、口ぐせは実際の発言として記録のあるものだけになります")),
+    ),
+    el(
+      "label",
+      { class: "toggle", for: "useExtreme" },
+      extreme,
+      el(
+        "span",
+        {},
+        "過激な口ぐせも混ぜる",
+        el("small", {}, "「しね」のような言葉と、見た目へのいじりが出ます。自分の成績を自分で見るときだけにしてください"),
+      ),
     ),
   );
 }
@@ -564,7 +607,13 @@ function render(): void {
     result.replaceChildren();
     return;
   }
-  const phrases = useImagined ? mergePhrases(BUILTIN_PHRASES, local.phrases, IMAGINED_PHRASES) : mergePhrases(BUILTIN_PHRASES, local.phrases);
+  const phrases = mergePhrases(
+    BUILTIN_PHRASES,
+    EXTRA_PHRASES,
+    local.phrases,
+    ...(useExtreme ? [EXTREME_PHRASES] : []),
+    ...(useImagined ? [IMAGINED_PHRASES] : []),
+  );
   const options = { variant: view.variant, champName, phrases };
   const intro = buildIntro(view.player, view.analysis, options);
   const sections = [profileAct(view), introAct(view, intro)];
