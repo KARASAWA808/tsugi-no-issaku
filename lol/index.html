@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- 自分のPCで遊ぶためのページ。もしどこかに置かれても検索に載らないようにしておく -->
+    <meta name="robots" content="noindex, nofollow" />
+    <title>辛口道場</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" />
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="top">
+        <p class="eyebrow">LoL 自己紹介 × 辛口講評</p>
+        <h1>辛口道場</h1>
+        <p class="lead">Riot ID を入れると直近の試合を集計して、あなたの代わりに強気な自己紹介を組み立てます。そのあと <span id="criticNameLead"></span> が、数字を突きつけて答え合わせをします。</p>
+      </header>
+
+      <section class="entry" aria-label="プレイヤーを選ぶ">
+        <form id="form" class="form" novalidate>
+          <div class="field grow">
+            <label for="riotId">Riot ID</label>
+            <input id="riotId" name="riotId" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="なまえ#JP1" maxlength="24" />
+          </div>
+          <div class="field">
+            <label for="platform">サーバー</label>
+            <select id="platform" name="platform"></select>
+          </div>
+          <button class="btn btn-main" id="submit" type="submit">解析する</button>
+        </form>
+        <p class="note" id="keyNote" hidden></p>
+        <div class="samples">
+          <p class="samples-label">サンプル(架空のプレイヤー)で試す</p>
+          <div class="sample-list" id="samples"></div>
+        </div>
+        <p class="status" id="status" role="status" aria-live="polite"></p>
+      </section>
+
+      <main id="result" hidden></main>
+
+      <footer class="foot">
+        <p><strong id="criticNameFoot"></strong>は、実在の配信者をモチーフにした<strong>非公式のパロディ</strong>です。ご本人・所属先とは一切関係がなく、画面に出る発言はすべて成績の数字から自動で組み立てた架空のもので、ご本人の発言や見解ではありません。</p>
+        <p>個人で楽しむためのページです。自分のアカウントで遊び、結果をご本人の発言であるかのように広めたり、ほかの人をからかう目的で使ったりしないでください。</p>
+        <p class="legal">辛口道場 isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, and all associated properties are trademarks or registered trademarks of Riot Games, Inc.</p>
+      </footer>
+    </div>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

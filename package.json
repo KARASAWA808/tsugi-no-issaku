@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "lol": "vite --config lol/vite.config.ts",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
@@ -14,6 +15,7 @@
     "quiz-pool": "node --no-warnings scripts/build-quiz-pool.mjs"
   },
   "devDependencies": {
+    "@types/node": "^22.20.5",
     "typescript": "^5.6.3",
     "vite": "^5.4.11",
     "vitest": "^2.1.8"
