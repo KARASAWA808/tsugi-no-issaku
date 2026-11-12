@@ -45,7 +45,7 @@ export function buildReview(player: PlayerData, analysis: Analysis, intro: Intro
   const rng = makeRng(seedOf(player, options.variant) ^ 0x5bd1e995);
   const v = valuesOf(player, analysis, options.champName ?? ((id) => id));
   // 口ぐせは別の乱数で選ぶ。口ぐせを足しても、元の評価文の選ばれ方は変わらない
-  const say = makeSpeaker(options.phrases ?? emptyBook(), makeRng(seedOf(player, options.variant) ^ 0x2c1b3c6d), player.gameName, analysis.mainRole);
+  const say = makeSpeaker(options.phrases ?? emptyBook(), makeRng(seedOf(player, options.variant) ^ 0x2c1b3c6d), player.gameName, analysis.mainRole, analysis.grade);
   const weak = new Set(analysis.weaknesses.map((w) => w.id));
   const mentioned = new Set<WeaknessId>();
 

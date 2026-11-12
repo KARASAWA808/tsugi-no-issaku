@@ -49,6 +49,11 @@ describe("parsePhrases", () => {
     expect(parsed.roast).toEqual([{ text: "CSの話", topic: "lowcs" }]);
   });
 
+  it("評価の限定を読む。知らない評価や空の一覧は、だれにでも出ないよう捨てる", () => {
+    const parsed = parsePhrases({ opening: [{ text: "低いとき", grades: ["C", "D"] }, { text: "書きまちがい", grades: ["E"] }, { text: "空", grades: [] }, { text: "形ちがい", grades: "D" }] });
+    expect(parsed.opening).toEqual([{ text: "低いとき", grades: ["C", "D"] }]);
+  });
+
   it("出典の覚え書きは残す", () => {
     expect(parsePhrases({ opening: [{ text: "はい", source: " クリップ " }] }).opening).toEqual([{ text: "はい", source: "クリップ" }]);
   });
@@ -124,6 +129,14 @@ describe("makeSpeaker", () => {
   it("話題を渡さない場所では、話題つきの言い回しは使わない", () => {
     const only = book({ verdictLow: [{ text: "CSの話、", topic: "lowcs" }] });
     expect(makeSpeaker(only, makeRng(1), "テスト")("verdictLow", "x")).toBe("x");
+  });
+
+  it("評価を限定した言い回しは、その評価の人にだけ使う", () => {
+    const only = book({ opening: [{ text: "低いとき、", grades: ["C", "D"] }] });
+    expect(makeSpeaker(only, makeRng(1), "テスト", "MIDDLE", "D")("opening", "x")).toBe("低いとき、x");
+    expect(makeSpeaker(only, makeRng(1), "テスト", "MIDDLE", "B")("opening", "x")).toBe("x");
+    // 評価を渡さないときは、限定つきのものは使わない
+    expect(makeSpeaker(only, makeRng(1), "テスト")("opening", "x")).toBe("x");
   });
 
   it("同じ言い回しは1度だけ。使い切った場所には何も付けない", () => {
@@ -336,6 +349,51 @@ describe("IMAGINED_PHRASES(言いそうな台詞として作ったもの)", () =
         const used = pairs.map(([a, b]) => b.replace(a, "")).filter((t) => t !== "");
         expect(new Set(used).size, used.join(" / ")).toBe(used.length);
       }
+    }
+  });
+});
+
+describe("口ぐせと本文のかみ合わせ(実際の発言と創作を混ぜた状態で)", () => {
+  const merged = mergePhrases(BUILTIN_PHRASES, IMAGINED_PHRASES);
+  /** そのサンプルを40回言い直したときに出る文章を全部つなげたもの */
+  const everything = (id: string): string =>
+    Array.from({ length: 40 }, (_, variant) => {
+      const r = review(id, merged, variant);
+      return [r.opening, ...r.replies.map((x) => x.text), ...r.roasts.map((x) => x.text), r.verdict, r.homework].join("\n");
+    }).join("\n");
+  const texts = Object.fromEntries(SAMPLE_PLAYERS.map((s) => [s.id, everything(s.id)]));
+
+  it("評価の高い人に、皮肉やきつい言い回しを付けない", () => {
+    // jg-solid は S、sup-vision は A
+    for (const id of ["jg-solid", "sup-vision"]) {
+      expect(texts[id]).not.toContain("下手くそだなと思ったらベイト");
+      expect(texts[id]).not.toMatch(/頭おかしくなってるやつ|アホが来た|クソだりぃ|見なきゃダメですか/);
+    }
+  });
+
+  it("B の人には、C・D 向けのきつい冒頭と総評を付けない", () => {
+    // top-farmer と adc-noward は B
+    for (const id of ["top-farmer", "adc-noward"]) {
+      expect(texts[id]).not.toMatch(/頭おかしくなってるやつ|アホが来た|クソだりぃ/);
+      expect(texts[id]).not.toMatch(/終わっとるやんけ|ZAKOの八宝菜|信じられないぐらい弱い|解散でーす|知育させた方がいい/);
+    }
+    // D の人には出る
+    expect(texts["mid-feeder"]).toMatch(/頭おかしくなってるやつ|アホが来た|クソだりぃ/);
+    expect(texts["mid-feeder"]).toMatch(/終わっとるやんけ|ZAKOの八宝菜|信じられないぐらい弱い|解散でーす/);
+  });
+
+  it("サイドレーンの話はトップにだけ、ジャングルのファームの話はジャングルにだけ出る", () => {
+    for (const s of SAMPLE_PLAYERS) {
+      if (s.id !== "top-farmer") expect(texts[s.id], s.id).not.toMatch(/サイドに出たチキン|サイドレーンに未来/);
+      if (s.id !== "jg-solid") expect(texts[s.id], s.id).not.toMatch(/ゴーレム/);
+    }
+  });
+
+  it("スキルや集団戦の話は、関係する弱みのある人にだけ出る", () => {
+    // adc-noward と sup-vision には、デス・ダメージ・波の弱みが無い
+    for (const id of ["adc-noward", "sup-vision", "jg-solid"]) {
+      expect(texts[id], id).not.toContain("くだらないスキルを吐く");
+      expect(texts[id], id).not.toContain("おかしい人が2人も居たら");
     }
   });
 });

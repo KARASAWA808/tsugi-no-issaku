@@ -9,11 +9,16 @@
 //   - 「えらいえらい」「〜おいちい」という赤ちゃん言葉の褒め方
 //   - 「〜した方がいい」「〜やめてほしい」「〜って話」という言い切り
 // 選ぶときの決まりは実際の発言と同じ(ほかの実在の人の名前、死や暴力を願う言葉、容姿・性別に触れるものは入れない)。
+import type { Grade } from "./analyze";
 import type { Phrase, PhraseBook, PhraseTopic } from "./phrases";
 import type { Role } from "./types";
 
 const SOURCE = "創作(話し方の傾向からの連想。実際の発言ではない)";
-type Extra = { after?: boolean; role?: Role; topic?: PhraseTopic };
+type Extra = { after?: boolean; role?: Role; topic?: PhraseTopic; grades?: readonly Grade[] };
+/** きつい言い回し。評価が C・D の人にだけ */
+const LOW: Extra = { grades: ["C", "D"] };
+/** 皮肉まじりの言い回し。S・A の人には出さない */
+const NOT_HIGH: Extra = { grades: ["B", "C", "D"] };
 const make = (text: string, extra: Extra = {}): Phrase => ({ text, ...extra, source: SOURCE, imagined: true });
 const after = (text: string, extra: Extra = {}): Phrase => make(text, { ...extra, after: true });
 /** その話題の評価文の前に付ける */
@@ -26,7 +31,7 @@ export const IMAGINED_PHRASES: PhraseBook = {
     make("はい、じゃあ見ていきまーす"),
     make("えーっと…まあいいや、見るわ"),
     make("ｯﾁ…はい、どうぞ"),
-    make("あの～、これ本当に見なきゃダメですか？"),
+    make("あの～、これ本当に見なきゃダメですか？", NOT_HIGH),
     make("お、来たね。覚悟はできてる？"),
     make("あ～はいはいはい、こういうタイプね"),
     make("先に言っとくけど、優しくはしないよ"),
@@ -157,14 +162,14 @@ export const IMAGINED_PHRASES: PhraseBook = {
     after("久しぶりにまともな人を見たわ"),
   ],
   verdictLow: [
-    make("厳しいって。これは厳しい"),
-    make("正直きつい。正直ね"),
+    make("厳しいって。これは厳しい", LOW),
+    make("正直きつい。正直ね", LOW),
     make("うーん…うん"),
-    after("はい、解散でーす"),
+    after("はい、解散でーす", LOW),
     after("うーん…まあいいや"),
-    after("伸びしろしかない。伸びしろしか"),
+    after("伸びしろしかない。伸びしろしか", LOW),
     after("練習して。普通に練習して"),
-    after("ここから上がるだけだから。たぶん"),
+    after("ここから上がるだけだから。たぶん", LOW),
   ],
   homework: [
     make("じゃあ宿題ね、"),

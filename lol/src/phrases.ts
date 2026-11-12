@@ -3,7 +3,7 @@
 //   1. この下の BUILTIN_PHRASES(出典を確かめられたものだけを、出典つきで置く)
 //   2. 手元にだけ置く lol/public/local/phrases.json(git 管理外。自分で聞いたことのある言い回しを足す場所)
 // 評価の中身(数字へのツッコミ)は自動で組み立てたもので、ご本人の発言ではない。口ぐせは言い回しを借りているだけ。
-import type { StrengthId, WeaknessId } from "./analyze";
+import type { Grade, StrengthId, WeaknessId } from "./analyze";
 import type { Role } from "./types";
 
 /** 口ぐせを合わせる「話題」。自己紹介や指摘が何の話か(analyze の強み・弱みと同じ名前) */
@@ -37,6 +37,8 @@ export interface Phrase {
   role?: Role;
   /** 書くと、その話題の評価文にだけ使う(「ファームが下手」はCSの指摘にだけ、など) */
   topic?: PhraseTopic;
+  /** 書くと、総合評価がこのどれかの人にだけ使う(きつい言い回しを高評価の人に出さない、など) */
+  grades?: readonly Grade[];
   /** どこで確かめた言い回しか(画面には出さない覚え書き) */
   source?: string;
   /** true なら、実際の発言ではなく「言いそうな台詞」として作ったもの。実際の発言より出にくくする */
@@ -54,6 +56,7 @@ const MAX_LENGTH = 80;
 const MAX_PER_SLOT = 200;
 const MAX_SOURCE_LENGTH = 200;
 const ROLES: readonly string[] = ["TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"];
+const GRADES: readonly string[] = ["S", "A", "B", "C", "D"];
 // 型で数えもれを防ぐため、話題の名前はオブジェクトのキーで持つ
 const TOPIC_NAMES: Record<PhraseTopic, true> = {
   kda: true, cs: true, vision: true, teamfight: true, damage: true, solokill: true, survive: true,
@@ -70,7 +73,7 @@ export const PHRASE_TOPICS = Object.keys(TOPIC_NAMES) as PhraseTopic[];
 function parsePhrase(item: unknown): Phrase | null {
   const raw = typeof item === "string" ? { text: item } : item;
   if (typeof raw !== "object" || raw === null) return null;
-  const { text, after, role, topic, source, imagined } = raw as Record<string, unknown>;
+  const { text, after, role, topic, grades, source, imagined } = raw as Record<string, unknown>;
   if (typeof text !== "string") return null;
   const trimmed = text.trim();
   if (trimmed === "" || trimmed.length > MAX_LENGTH) return null;
@@ -85,6 +88,11 @@ function parsePhrase(item: unknown): Phrase | null {
     if (typeof topic !== "string" || !Object.hasOwn(TOPIC_NAMES, topic)) return null;
     phrase.topic = topic as PhraseTopic;
   }
+  if (grades !== undefined) {
+    // 評価の書きまちがいも、だれにでも出てしまわないよう捨てる
+    if (!Array.isArray(grades) || grades.length === 0 || !grades.every((g) => typeof g === "string" && GRADES.includes(g))) return null;
+    phrase.grades = grades as Grade[];
+  }
   if (typeof source === "string" && source.trim() !== "") phrase.source = source.trim().slice(0, MAX_SOURCE_LENGTH);
   if (imagined === true) phrase.imagined = true;
   return phrase;
@@ -92,7 +100,7 @@ function parsePhrase(item: unknown): Phrase | null {
 
 /**
  * phrases.json の中身を PhraseBook にする。形の合わないところは黙って捨てる。
- * 各場所は、文字列か `{ "text": "...", "after": true, "role": "TOP", "topic": "lowcs" }` の配列。
+ * 各場所は、文字列か `{ "text": "...", "after": true, "role": "TOP", "topic": "lowcs", "grades": ["C", "D"] }` の配列。
  */
 export function parsePhrases(input: unknown): PhraseBook {
   const book = emptyBook();
@@ -142,13 +150,18 @@ export function makeSpeaker(
   rng: () => number,
   name: string,
   role: Role = "UNKNOWN",
+  grade?: Grade,
 ): (slot: Slot, line: string, topic?: PhraseTopic) => string {
   const used = new Set<string>();
 
   return (slot, line, topic) => {
     // 別の場所でもう使った言い回しも、ここでは使わない
     const fresh = book[slot].filter(
-      (p) => (p.role === undefined || p.role === role) && (p.topic === undefined || p.topic === topic) && !used.has(p.text),
+      (p) =>
+        (p.role === undefined || p.role === role) &&
+        (p.topic === undefined || p.topic === topic) &&
+        (p.grades === undefined || (grade !== undefined && p.grades.includes(grade))) &&
+        !used.has(p.text),
     );
     if (fresh.length === 0) return line;
     // 出番の少ないものから先に使う
@@ -193,6 +206,10 @@ export function makeSpeaker(
  */
 const SHEET = "らいさまちくちく集";
 type Extra = Omit<Phrase, "text" | "source">;
+/** きつい言い回し。評価が C・D の人にだけ */
+const LOW: Extra = { grades: ["C", "D"] };
+/** 皮肉まじりの言い回し。S・A の人には出さない */
+const NOT_HIGH: Extra = { grades: ["B", "C", "D"] };
 const q = (no: number, text: string, extra: Extra = {}): Phrase => ({ text, ...extra, source: `${SHEET} No.${no}` });
 const k = (no: number, text: string, extra: Extra = {}): Phrase => ({ text, ...extra, source: `${SHEET}(かわいい集)No.${no}` });
 /** 加工して入れたもの。how に、何をしたか(名前を置きかえ・名前を省略・抜粋)を書く */
@@ -219,9 +236,9 @@ export const BUILTIN_PHRASES: PhraseBook = {
     q(295, "あ？お前を待ってたんだが？"),
     q(31, "お前起きてろよ、今から行くぞ"),
     q(34, "ねえねえねえ...まあいいや"),
-    q(305, "アホが来た"),
-    q(600, "久しぶりに見たな頭おかしくなってるやつ"),
-    q(402, "ｯﾁ、ｸｯｿ...クソだりぃマジで..."),
+    q(305, "アホが来た", LOW),
+    q(600, "久しぶりに見たな頭おかしくなってるやつ", LOW),
+    q(402, "ｯﾁ、ｸｯｿ...クソだりぃマジで...", LOW),
   ],
   accept: [
     k(51, "えらいえらい"),
@@ -240,7 +257,7 @@ export const BUILTIN_PHRASES: PhraseBook = {
     kx(241, "{name}！！{name}！！やれるやん！", RENAMED),
     x(627, "実際そう", "相手の台詞を省略"),
     x(565, "俺の下位互換だ", UNNAMED, AFTER),
-    q(726, "信じられん下手くそだなと思ったらベイトだった"),
+    q(726, "信じられん下手くそだなと思ったらベイトだった", NOT_HIGH),
     {
       text: "最も替えたくなかったのがサポートだった。",
       role: "UTILITY",
@@ -308,7 +325,7 @@ export const BUILTIN_PHRASES: PhraseBook = {
     q(50, "耐えて耐えて崩壊したならともかく、仕掛けてって崩壊するのは...ワッツ？", { topic: "feeder" }),
     q(13, "本当にファームが下手", { topic: "lowcs" }),
     q(346, "なんでワードない？『ワードないんだよな』意味わかんないんだけど", { topic: "blind" }),
-    q(348, "サイドレーンに未来あるわけないでしょ", { topic: "afk" }),
+    q(348, "サイドレーンに未来あるわけないでしょ", { topic: "afk", role: "TOP" }),
     q(5, "早く行って、早く行ってよ。意味わからんて", { topic: "afk" }),
     q(12, "観客ですか？って話。死ぬなとは言ったけど下がれとは言ってない", { topic: "lowdamage" }),
     q(161, "チャンピオンは、悪くない", { ...AFTER, topic: "tourist" }),
@@ -329,7 +346,8 @@ export const BUILTIN_PHRASES: PhraseBook = {
     q(698, "ボタンが下手なのはいい別に"),
     q(344, "褒めれるところがあったら褒めてたよ"),
     q(51, "これ誰か操作してあげてください", AFTER),
-    q(101, "おかしい人が2人も居たら集団戦には勝てない", AFTER),
+    q(101, "おかしい人が2人も居たら集団戦には勝てない", { ...AFTER, topic: "lowdamage" }),
+    q(101, "おかしい人が2人も居たら集団戦には勝てない", { ...AFTER, topic: "coinflip" }),
     q(731, "だからレート上がんないんだよね", AFTER),
     q(166, "え、使えな"),
     q(317, "なんだコイツ！？ホントに役に立たないな！"),
@@ -349,7 +367,7 @@ export const BUILTIN_PHRASES: PhraseBook = {
     q(137, "ふざけてるお前らマジで。LoLを何も見てない！マジで終わってる", { topic: "blind" }),
     q(671, "お前よわｗお前マジｗお前よわｗお前よわｗマジなんもせんやんｗ", { topic: "afk" }),
     q(543, "何でお前離れてるんだ？BAKAなのか？", { topic: "afk" }),
-    q(730, "こんなサイドに出たチキンを育てるために皆はあなたにファームをあげてないんで", { ...AFTER, topic: "afk" }),
+    q(730, "こんなサイドに出たチキンを育てるために皆はあなたにファームをあげてないんで", { ...AFTER, topic: "afk", role: "TOP" }),
     x(618, "ジャングル周ってるだけこれ。ロボットだよこれ、ジャングルフルクリアロボットになってる", EXCERPT, { topic: "afk", role: "JUNGLE" }),
     q(403, "ゴミクソカスファイトだった", { ...AFTER, topic: "lowdamage" }),
     x(420, "{name}、キャリーの自覚ないね。君がダメージをそれしか出さないんだったら、この構成はできないよ。", `${RENAMED}・${EXCERPT}`, { topic: "lowdamage" }),
@@ -364,7 +382,7 @@ export const BUILTIN_PHRASES: PhraseBook = {
     q(53, "このクソJGマジで", { role: "JUNGLE" }),
     q(363, "このジャングルの人さあ～、なんでこんな……こんなことするの？", { role: "JUNGLE" }),
     q(381, "マジでクソみたいなMidガンクするんだったらTopかBotにガンクしてほしい", { ...AFTER, role: "JUNGLE" }),
-    q(672, "遠いなーじゃないんだよねこれ、ゴーレム狩ってる場合じゃねえよカスって言った方がいい", { ...AFTER, role: "JUNGLE" }),
+    q(672, "遠いなーじゃないんだよねこれ、ゴーレム狩ってる場合じゃねえよカスって言った方がいい", { ...AFTER, role: "JUNGLE", topic: "noobjective" }),
     x(526, "何やってんだこのADC、もういいやこいつ", UNNAMED, { role: "BOTTOM" }),
     q(108, "お前何回それで死ぬんだよ", { ...AFTER, topic: "feeder" }),
     q(639, "こいつ本当に無限に死に続けるな", { ...AFTER, topic: "feeder" }),
@@ -375,7 +393,7 @@ export const BUILTIN_PHRASES: PhraseBook = {
     q(13, "本当にファームが下手", { topic: "lowcs" }),
     q(42, "ワードワードワードワードなんでなんでなんで、なんで川のワード差しに行かない？", { topic: "blind" }),
     q(346, "なんでワードない？『ワードないんだよな』意味わかんないんだけど", { topic: "nopink" }),
-    q(348, "サイドレーンに未来あるわけないでしょ", { topic: "afk" }),
+    q(348, "サイドレーンに未来あるわけないでしょ", { topic: "afk", role: "TOP" }),
     q(207, "ハッピーふわふわAFKタイム始まったな", { topic: "afk" }),
     q(539, "自分のことネクサスだと思ってる", { ...AFTER, topic: "afk" }),
     q(388, "あのねぇ・・・行けって言われたら行くんだよね", { topic: "afk" }),
@@ -395,7 +413,8 @@ export const BUILTIN_PHRASES: PhraseBook = {
     q(9, "ドラゴン 聞いてる？ドラゴンドラゴンドラゴンドラゴン", { topic: "noobjective" }),
     q(764, "マクロがマジできたない", { ...AFTER, topic: "noobjective" }),
     q(146, "守らないで良いタワーは存在しない", { ...AFTER, topic: "noobjective" }),
-    q(3, "この時間帯にゴーレムでファームするJGおまえ自分のレートで見たことあるか？", { role: "JUNGLE" }),
+    q(3, "この時間帯にゴーレムでファームするJGおまえ自分のレートで見たことあるか？", { role: "JUNGLE", topic: "afk" }),
+    q(3, "この時間帯にゴーレムでファームするJGおまえ自分のレートで見たことあるか？", { role: "JUNGLE", topic: "noobjective" }),
     TOP_LANER,
   ],
   verdictHigh: [
@@ -407,42 +426,44 @@ export const BUILTIN_PHRASES: PhraseBook = {
   verdictLow: [
     // 打ち上げの最終フィードバックで、笑いながら。記事の題に出ている文言
     { text: "このチーム弱ｗ", source: "https://fistbump-news.jp/article/2025/09/10/1554.html(記事の題)" },
-    q(416, "あの～自覚ありますかぁ？ちょっと弱すぎないですか？あなた。信じられないぐらい弱い"),
-    q(541, "俺は思ったんだ...ゲーム下手だと行き着く先がおかしいんだなって"),
-    q(273, "終わっとるやんけ！"),
+    q(416, "あの～自覚ありますかぁ？ちょっと弱すぎないですか？あなた。信じられないぐらい弱い", LOW),
+    q(541, "俺は思ったんだ...ゲーム下手だと行き着く先がおかしいんだなって", LOW),
+    q(273, "終わっとるやんけ！", LOW),
     q(687, "まぁどんまい。こっからは蛇足だから、どんなミスをしようが。"),
     q(376, "俺思った、チームが弱いほうがやりがいがある。相手のが弱いと申し訳なくなってくる"),
     k(283, "んふふふふｗどんま～い！ｗ"),
     q(142, "俺ね、理解ったよこのゲーム。俺が3人いたら勝てる", AFTER),
-    q(202, "無理だったね、わかってたはずだよ", AFTER),
-    q(140, "うーん、終わりで良いんじゃないか？", AFTER),
-    q(334, "弱いなお前マジで", AFTER),
-    q(411, "Not ok give owari", AFTER),
+    q(202, "無理だったね、わかってたはずだよ", { ...AFTER, ...LOW }),
+    q(140, "うーん、終わりで良いんじゃないか？", { ...AFTER, ...LOW }),
+    q(334, "弱いなお前マジで", { ...AFTER, ...LOW }),
+    q(411, "Not ok give owari", { ...AFTER, ...LOW }),
     q(799, "もういいやなんでも", AFTER),
     q(250, "まあ俺じゃない。ミスったのは", AFTER),
     q(792, "コーチングって、本当くだらない", AFTER),
-    q(794, "雑魚雑魚のみなさん、へたっぴだねぇLoLが"),
-    q(761, "ZAKOの八宝菜だ"),
+    q(794, "雑魚雑魚のみなさん、へたっぴだねぇLoLが", LOW),
+    q(761, "ZAKOの八宝菜だ", LOW),
     q(209, "カスのカスタムだからしょうがないんだけど"),
     q(289, "ばーかばーか！ﾊﾊｯ ばーかばーか！"),
-    q(379, "本当にこれ見てるとちょっと頭悪くなってくる"),
-    q(760, "ソロQよええなコイツら。キャリーできない、キャリーできない人間たち。"),
+    q(379, "本当にこれ見てるとちょっと頭悪くなってくる", LOW),
+    q(760, "ソロQよええなコイツら。キャリーできない、キャリーできない人間たち。", LOW),
     x(710, "俺{name}をゲームで見てて上手いなって思うこと本当にないから", RENAMED),
     q(635, "俺のタウント、神。そして味方はゴミ", AFTER),
-    q(188, "ダメだアイツ使えねぇ。下がろ", AFTER),
-    q(319, "あ～ッ！クソゲー！", AFTER),
-    q(776, "脳みそが低レートになっちゃった", AFTER),
+    q(188, "ダメだアイツ使えねぇ。下がろ", { ...AFTER, ...LOW }),
+    q(319, "あ～ッ！クソゲー！", { ...AFTER, ...LOW }),
+    q(776, "脳みそが低レートになっちゃった", { ...AFTER, ...LOW }),
     x(302, "サポートで一番下手だったのは{name}だったわ", RENAMED, { ...AFTER, role: "UTILITY" }),
     q(77, "助けて、助けて助けて！ADCが弱い！", { ...AFTER, role: "BOTTOM" }),
     q(661, "うーん、君topレーナーじゃないねえ", { ...AFTER, role: "TOP" }),
     TOP_LANER,
   ],
   homework: [
-    q(733, "くだらないスキルを吐くのをやめよう"),
+    q(733, "くだらないスキルを吐くのをやめよう", { topic: "lowdamage" }),
+    q(733, "くだらないスキルを吐くのをやめよう", { topic: "feeder" }),
+    q(733, "くだらないスキルを吐くのをやめよう", { topic: "coinflip" }),
     q(533, "言って出来るやつと出来ねえやつがいるから、とりあえず言ってみるっていうのが大事。"),
     q(177, "いや結構常識だったんで伝え忘れて"),
     q(459, "このままだと勝てないと思うんで今からこのラウンド捨てて作戦会議しましょう。どうやって勝ちます？"),
-    q(75, "知能の問題だろこれ。知育させた方がいい"),
+    q(75, "知能の問題だろこれ。知育させた方がいい", LOW),
     q(532, "内容が難しくないんだからやれよつってるだけなんだよね", AFTER),
     q(715, "わかんないだろうな、まあいいや", AFTER),
     k(181, "ﾏﾀﾞｶﾃﾙﾖ~", AFTER),
