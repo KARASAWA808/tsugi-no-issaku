@@ -150,7 +150,7 @@ export const IMAGINED_PHRASES: PhraseBook = {
     onAfter("marathon", "連戦ロボットになってる"),
     onAfter("nightloss", "深夜のプレイ、別人なんだよね"),
     onAfter("ff", "勝つ気あります？ って話"),
-    onAfter("pinger", "ピン打ってる暇あったらミニオン取って"),
+    onAfter("pinger", "ピン打ってる暇あったら手を動かして"),
     onAfter("slump", "いまの自分、前の自分に負けてるよ"),
     onAfter("sidegap", "マップ反対になっただけなんだけどね"),
     onAfter("latelose", "長い試合で迷子になるのやめてほしい"),

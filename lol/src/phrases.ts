@@ -158,7 +158,7 @@ export const countPhrases = (book: PhraseBook): number => SLOTS.reduce((total, s
 // 句点や読点で終わる言い回し。そのまま次の文を続けてよい
 const CLOSED = /[。、,)\uFF09」』]$/;
 // ？や！、伸ばしや笑いで終わる言い回し。句点は足さず、前に付けるときだけ1字あける
-const TRAILING = /[!?\uFF01\uFF1F.…~\uFF5E〜ー♪♡wｗ・]$/;
+const TRAILING = /[!?\uFF01\uFF1F.…~\uFF5E〜ー♪♡☆wｗ・]$/;
 
 /**
  * 評価文に口ぐせを付ける関数を作る(1回の評価につき1つ作る)。
@@ -316,6 +316,8 @@ export const BUILTIN_PHRASES: PhraseBook = {
       // 元は、チームの中でサポートを評価した場面の言葉(「最も替えたくなかったのがサポートだった」)
       text: "いちばん替えたくないのが、こういうサポート。",
       role: "UTILITY",
+      // 手放しの褒め言葉なので、評価の低い人には出さない
+      grades: ["S", "A", "B"],
       source: `https://fistbump-news.jp/article/2025/07/30/1378.html(記事の題。${REWORDED})`,
     },
   ],
