@@ -335,7 +335,7 @@ function reviewAct(current: View, intro: Intro, review: Review): HTMLElement {
     );
   });
   if (review.roasts.length > 0) {
-    talk.append(el("p", { class: "sub-head" }, "自己紹介になかった話"));
+    talk.append(el("p", { class: "sub-head" }, "まだある、ちくちく"));
     for (const roast of review.roasts) talk.append(el("p", { class: "bubble critic" }, roast.text));
   }
   talk.append(

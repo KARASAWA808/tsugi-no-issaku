@@ -43,7 +43,7 @@ const ACKS: Record<StrengthId, readonly Line[]> = {
   ],
   vision: [
     (v) => `視界スコア分間${v.vision}、これはえらい。地味だけど勝ちに直結するやつ。`,
-    (v) => `コントロールワード1試合${v.pinks}本。ちゃんと買ってる人、意外と少ないんよ。`,
+    (v) => `コントロールワード1試合${v.pinks}本。ちゃんと買ってる人は意外と少ない。`,
   ],
   teamfight: [
     (v) => `関与率${v.kp}%は高い。ちゃんと味方と同じゲームをしてる。`,
@@ -101,7 +101,7 @@ const BUTS: readonly { strength: StrengthId; weakness: WeaknessId; line: Line }[
 
 const DEBUNKS: Record<WeaknessId | "spirit", readonly Line[]> = {
   feeder: [
-    (v) => `「前で戦ってる」じゃないんよ。30分で${v.d30}回死ぬのは、戦ってるんじゃなくて配ってる。`,
+    (v) => `「前で戦ってる」じゃない。30分で${v.d30}回死ぬのは、戦ってるんじゃなくて配ってる。`,
     (v) => `いちばん死んだ試合、${v.worstChamp}で${v.worstD}デス。これはアグレッシブじゃなくて事故。`,
   ],
   grayscreen: [(v) => `試合時間の${v.dead}%が灰色。それは考える時間じゃなくて、味方が4人で耐えてる時間。`],
@@ -235,7 +235,7 @@ export function buildReview(player: PlayerData, analysis: Analysis, intro: Intro
   const rng = makeRng(seedOf(player, options.variant) ^ 0x5bd1e995);
   const v = valuesOf(player, analysis, options.champName ?? ((id) => id));
   // 口ぐせは別の乱数で選ぶ。口ぐせを足しても、元の評価文の選ばれ方は変わらない
-  const say = makeSpeaker(options.phrases ?? emptyBook(), makeRng(seedOf(player, options.variant) ^ 0x2c1b3c6d), player.gameName);
+  const say = makeSpeaker(options.phrases ?? emptyBook(), makeRng(seedOf(player, options.variant) ^ 0x2c1b3c6d), player.gameName, analysis.mainRole);
   const weak = new Set(analysis.weaknesses.map((w) => w.id));
   const mentioned = new Set<WeaknessId>();
 
